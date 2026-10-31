@@ -13,3 +13,7 @@ Builds `local_only/p1g/ps2_netemu_p1g_G0..G3.self` (generic hypercall wrapper th
 - **PROVEN:** the ps2_netemu partition may open and close the BD drive device (bus 4, dev 2) from its own code, with the drive empty. The hypervisor accepted both calls, and the partition did not die. The earlier crashes (P1b, P1d-A, P1e) were caused by our hand-written wrapper, not by LV1 or the drive. Return codes match the 4.93 LV1 static analysis (-17 for an invalid bus, -11 for a close by a non-holder).
 - **UNKNOWN:** behaviour with a PS2 disc inserted; whether DMA setup, device commands and sector reads work from this partition (the P0I finding that `PS2_NE_LPAR` leaves the physical bus unpowered is still untested: opening was fine, a data transfer may not be); whether PS2 media data reads need the secure-service authentication (virtual UART 10, service 0x5000 op 0x5005, as softemu does).
 - Next: run G3 once with the PS2 DVD inserted; then P2 stages (DMA region, device queries, one sector read), see docs\P2_PLAN.md.
+
+## G3 with the PS2 disc inserted (owner, 2026-10-31)
+
+- **PROVEN (owner report):** with the PS2 DVD inserted before launching the ISO from webMAN, G3 again showed open=SUCCESS and close=SUCCESS. Media presence does not change the open/close result.
