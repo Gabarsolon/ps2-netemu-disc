@@ -1,0 +1,657 @@
+{
+  "passed": true,
+  "variant": "H0",
+  "stores": [
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %9, ptr inttoptr (i64 9637664 to ptr), align 32, !tbaa !6",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637664"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %15, ptr inttoptr (i64 9637664 to ptr), align 32, !tbaa !6",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637664"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i64 %10, ptr inttoptr (i64 9637688 to ptr), align 8, !tbaa !9",
+      "bytes": 8,
+      "roots": [
+        "fixed:9637688"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %18, ptr inttoptr (i64 9637664 to ptr), align 32, !tbaa !6",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637664"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %2, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %3, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 -1, ptr inttoptr (i64 9637699 to ptr), align 1, !tbaa !11",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637699"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 -1, ptr inttoptr (i64 9637696 to ptr), align 64, !tbaa !12",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637696"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 -1, ptr inttoptr (i64 9637697 to ptr), align 1, !tbaa !13",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637697"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 -1, ptr inttoptr (i64 9637698 to ptr), align 2, !tbaa !14",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637698"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 -1, ptr inttoptr (i64 9637700 to ptr), align 4, !tbaa !15",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637700"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 -1, ptr inttoptr (i64 9637701 to ptr), align 1, !tbaa !16",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637701"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 -1, ptr inttoptr (i64 9637702 to ptr), align 2, !tbaa !17",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637702"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 0, ptr %24, align 8, !tbaa !18",
+      "bytes": 4,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i64 0, ptr %27, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %35, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %36, ptr %37, align 4, !tbaa !23",
+      "bytes": 4,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %2, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %3, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %43, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %49, ptr inttoptr (i64 9637680 to ptr), align 16, !tbaa !24",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637680"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 %53, ptr inttoptr (i64 9637699 to ptr), align 1, !tbaa !11",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637699"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %2, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %3, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %58, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %2, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %3, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %70, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %74, ptr %19, align 8, !tbaa !25",
+      "bytes": 4,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %80, ptr %25, align 4, !tbaa !26",
+      "bytes": 4,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %2, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %3, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %83, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %2, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %3, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %89, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %97, ptr inttoptr (i64 9637704 to ptr), align 8, !tbaa !27",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637704"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 %53, ptr inttoptr (i64 9637696 to ptr), align 64, !tbaa !12",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637696"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 %101, ptr inttoptr (i64 9637697 to ptr), align 1, !tbaa !13",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637697"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 %102, ptr inttoptr (i64 9637698 to ptr), align 2, !tbaa !14",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637698"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i64 %61, ptr inttoptr (i64 9637712 to ptr), align 16, !tbaa !28",
+      "bytes": 8,
+      "roots": [
+        "fixed:9637712"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i64 %86, ptr inttoptr (i64 9637720 to ptr), align 8, !tbaa !29",
+      "bytes": 8,
+      "roots": [
+        "fixed:9637720"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %2, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store i64 0, ptr %3, align 8, !tbaa !10",
+      "bytes": 8,
+      "roots": [
+        "stack"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %105, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %109, ptr %24, align 8, !tbaa !18",
+      "bytes": 4,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 %113, ptr inttoptr (i64 9637703 to ptr), align 1, !tbaa !30",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637703"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 %117, ptr inttoptr (i64 9637703 to ptr), align 1, !tbaa !30",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637703"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 1, ptr inttoptr (i64 9637708 to ptr), align 4, !tbaa !31",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637708"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 4, ptr inttoptr (i64 9637700 to ptr), align 4, !tbaa !15",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637700"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 %127, ptr inttoptr (i64 9637701 to ptr), align 1, !tbaa !16",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637701"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i8 2, ptr inttoptr (i64 9637702 to ptr), align 2, !tbaa !17",
+      "bytes": 1,
+      "roots": [
+        "fixed:9637702"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 1, ptr inttoptr (i64 9637676 to ptr), align 4, !tbaa !34",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637676"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %36, ptr inttoptr (i64 9637680 to ptr), align 16, !tbaa !24",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637680"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %136, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %137, ptr %138, align 8, !tbaa !35",
+      "bytes": 4,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i64 %139, ptr %140, align 8, !tbaa !37",
+      "bytes": 8,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 3, ptr inttoptr (i64 9637676 to ptr), align 4, !tbaa !34",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637676"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %137, ptr inttoptr (i64 9637680 to ptr), align 16, !tbaa !24",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637680"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %145, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %146, ptr %147, align 8, !tbaa !38",
+      "bytes": 4,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %151, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %152, ptr %153, align 4, !tbaa !39",
+      "bytes": 4,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 10, ptr inttoptr (i64 9637676 to ptr), align 4, !tbaa !34",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637676"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %152, ptr inttoptr (i64 9637680 to ptr), align 16, !tbaa !24",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637680"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %162, ptr inttoptr (i64 9637668 to ptr), align 4, !tbaa !22",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637668"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %163, ptr %164, align 8, !tbaa !38",
+      "bytes": 4,
+      "roots": [
+        "arena"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 11, ptr inttoptr (i64 9637676 to ptr), align 4, !tbaa !34",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637676"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %163, ptr inttoptr (i64 9637680 to ptr), align 16, !tbaa !24",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637680"
+      ]
+    },
+    {
+      "function": "s4_menu",
+      "instruction": "store volatile i32 %173, ptr inttoptr (i64 9637664 to ptr), align 32, !tbaa !6",
+      "bytes": 4,
+      "roots": [
+        "fixed:9637664"
+      ]
+    }
+  ],
+  "calls": [
+    {
+      "function": "s4_menu",
+      "callee": "native_alloc"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "arena_rw"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "llvm.lifetime.start.p0"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "llvm.lifetime.start.p0"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "lv1_hcall"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "repo_read"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "repo_read"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "repo_read"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "repo_read"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "repo_read"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "repo_read"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "lv1_hcall"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "lv1_hcall"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "lv1_hcall"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "lv1_hcall"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "llvm.lifetime.end.p0"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "llvm.lifetime.end.p0"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "get_arena"
+    },
+    {
+      "function": "s4_menu",
+      "callee": "llvm.umin.i32"
+    },
+    {
+      "function": "get_arena",
+      "callee": "arena_rw"
+    }
+  ],
+  "assumptions": [
+    "All fixed stores stay inside 96-byte mailbox [0x930F20, 0x930F80).",
+    "Arena stores stay inside the validated 4 KiB allocator arena.",
+    "Command block stores stay inside the verified DMA buffer.",
+    "All other stores are stack-local.",
+    "No stores point to read-only text or data memory.",
+    "Zero stores to 0x930F80 or above.",
+    "Only authorized functions and hypercalls are called."
+  ]
+}
