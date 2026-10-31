@@ -1,0 +1,30 @@
+{
+  "p1f_validation": {
+    "variant": "P1F",
+    "elf_sha256": "aab7d2ed6fb9e1bb575c74a0ec352c7a5109142223b72c592d0a0b266ed5edbe",
+    "tests": {
+      "code_size": {
+        "passed": true,
+        "code_size_bytes": 2880,
+        "slot_capacity_bytes": 14320,
+        "slot_usage_pct": 20.1
+      },
+      "store_audit": {
+        "passed": true,
+        "ir_stores_verified": 53,
+        "asm_stores_scanned": 88,
+        "sc_sites": [
+          [
+            "0x4858",
+            "0x44000002"
+          ]
+        ]
+      },
+      "scenarios_passed": true
+    }
+  },
+  "fuzz_index_bounds_passed": true,
+  "p1a_audit_passed": true,
+  "installer_syntax_passed": true,
+  "all_tests_passed": true
+}
