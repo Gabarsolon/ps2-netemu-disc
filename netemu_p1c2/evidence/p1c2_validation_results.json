@@ -1,0 +1,37 @@
+{
+  "elf_sha256": "cc03ef64f159737eeaaa8dddb2bfd4c27107aa9d0ab30fd2a90aadfc6a3163a8",
+  "tests": {
+    "code_size": {
+      "passed": true,
+      "code_size_bytes": 4296,
+      "slot_capacity_bytes": 14320,
+      "slot_usage_pct": 30.0
+    },
+    "store_audit": {
+      "passed": true,
+      "ir_stores_verified": 51,
+      "asm_stores_scanned": 106,
+      "sc_sites": [],
+      "provenance": "All stores verified inside stack, mailbox [0x930F20, 0x930F80), or arena"
+    },
+    "all_scenarios_passed": true,
+    "index_fuzzing": {
+      "page_00": {
+        "max_index": 159,
+        "table_size": 160
+      },
+      "standard_field_pages": {
+        "max_index": 262,
+        "table_size": 263
+      },
+      "blk_size_pages": {
+        "max_index": 267,
+        "table_size": 268
+      },
+      "pager_pages": {
+        "max_page": 23,
+        "total_pages": 24
+      }
+    }
+  }
+}
