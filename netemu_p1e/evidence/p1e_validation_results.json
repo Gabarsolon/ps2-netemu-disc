@@ -1,0 +1,30 @@
+{
+  "p1e_validation": {
+    "variant": "P1E",
+    "elf_sha256": "81a672f33c5d247ed7d71014ba0da5a27e6285881c5db7630870eb1eb2b3e12e",
+    "tests": {
+      "code_size": {
+        "passed": true,
+        "code_size_bytes": 2616,
+        "slot_capacity_bytes": 14320,
+        "slot_usage_pct": 18.3
+      },
+      "store_audit": {
+        "passed": true,
+        "ir_stores_verified": 53,
+        "asm_stores_scanned": 86,
+        "sc_sites": [
+          [
+            "0x4828",
+            "0x44000002"
+          ]
+        ]
+      },
+      "scenarios_passed": true
+    }
+  },
+  "fuzz_index_bounds_passed": true,
+  "p1a_audit_passed": true,
+  "installer_syntax_passed": true,
+  "all_tests_passed": true
+}
