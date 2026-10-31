@@ -11,7 +11,7 @@ SELF_SHA = 'bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a'
 
 for d in ['build', 'evidence', 'tmp']:
     (H / d).mkdir(exist_ok=True)
-(ROOT / 'local_only' / 'p1b_noopen').mkdir(parents=True, exist_ok=True)
+(ROOT / 'local_only' / 'p1c').mkdir(parents=True, exist_ok=True)
 
 def headers(e):
     po, so = struct.unpack_from('>QQ', e, 32)
@@ -39,25 +39,12 @@ def make_entries(syms):
     a = runpy.run_path(str(H / 'ppcasm.py'))
     code = bytearray(0x100)  # 256 bytes for trampolines (0x4800..0x4900)
 
-    # 1. lv1_open_device at 0x4820 (remains linked into code slot, never called when PROBE_DO_OPEN=0)
-    asm_open = a['Assembler'](0x4820)
-    asm_open.asm('li r11, 0xaa\noris r11, r11, 0x8000\nsc 0\nblr\n')
-    b_open, _ = asm_open.finish()
-    assert len(b_open) <= 16
-    code[0x4820 - 0x4800 : 0x4820 - 0x4800 + len(b_open)] = b_open
-    syms['lv1_open_device'] = 0x4820
-
-    # 2. lv1_close_device at 0x4830 (remains linked into code slot, never called when PROBE_DO_OPEN=0)
-    asm_close = a['Assembler'](0x4830)
-    asm_close.asm('li r11, 0xab\noris r11, r11, 0x8000\nsc 0\nblr\n')
-    b_close, _ = asm_close.finish()
-    assert len(b_close) <= 16
-    code[0x4830 - 0x4800 : 0x4830 - 0x4800 + len(b_close)] = b_close
-    syms['lv1_close_device'] = 0x4830
-
-    # 3. repo_read at 0x4840 and entry_menu at 0x4880
+    # 1. repo_read at 0x4800 (target stock 0x111eb8, TOC 0x751280)
+    # 2. native_alloc at 0x4840 (target stock 0x0b9848, TOC 0x751280)
+    # 3. entry_menu at 0x4880 (target s4_menu, TOC syms['.TOC.'])
     entries = [
-        ('repo_read', 0x4840, 0x111eb8, False),
+        ('repo_read', 0x4800, 0x111eb8, False),
+        ('native_alloc', 0x4840, 0x0b9848, False),
         ('entry_menu', 0x4880, syms['s4_menu'], True)
     ]
     for name, pc, target, payload in entries:
@@ -84,95 +71,181 @@ def make_entries(syms):
         asm = a['Assembler'](pc)
         asm.asm(source)
         b, rows = asm.finish()
-        assert len(b) <= 64, f'{name} trampoline exceeds 64 bytes'
+        assert len(b) <= 64, f'{name} trampoline exceeds 64 bytes ({len(b)})'
         code[pc - 0x4800 : pc - 0x4800 + len(b)] = b
         syms[name] = pc
     return bytes(code)
 
 def build_labels():
-    # Page A: P1B DONE rom=%s open=%s close=%s (75 strings, padded to 48 bytes)
-    # Includes "open=OFF" for ablation build
-    r_strs = ["0", "1", "2", "3", "4+"]
-    o_strs = ["SKIP", "OK", "DENIED", "ERR", "OFF"]
-    c_strs = ["-", "OK", "ERR"]
-    labels_a = []
-    for r in range(5):
-        for o in range(5):
-            for c in range(3):
-                s = f"P1B DONE rom={r_strs[r]} open={o_strs[o]} close={c_strs[c]}"
-                assert len(s) < 48
-                labels_a.append(s.encode('ascii').ljust(48, b'\0'))
-    blob_a = b''.join(labels_a)
-
-    # Page B: ROM B=%02d D=%02d P=%s ID=%s (7169 strings, padded to 48 bytes)
-    labels_b = [b"P1B NO ROM DEV (R=0)\0".ljust(48, b'\0')]
-    for mode in range(7):
-        for b in range(16):
-            for d in range(16):
-                for p in range(4):
-                    p_str = str(p) if p < 3 else "?"
-                    if mode == 0:
-                        id_str = f"ID={b:x}/{d:x}"
-                    elif mode == 1:
-                        id_str = "ID=500/501"
-                    elif mode == 2:
-                        id_str = "ID=100/200"
-                    elif mode == 3:
-                        id_str = "ID=4/0"
-                    elif mode == 4:
-                        id_str = "ID=5/2"
-                    elif mode == 5:
-                        id_str = "ID=0/0"
-                    else:
-                        id_str = "ID=HEX"
-                    s = f"ROM B={b:02d} D={d:02d} P={p_str} {id_str}"
-                    assert len(s) < 48
-                    labels_b.append(s.encode('ascii').ljust(48, b'\0'))
-    blob_b = b''.join(labels_b)
-
-    # Page C: HDD B=%s D=%s P=%s %s (901 strings, padded to 48 bytes)
-    labels_c = [b"HDD: NOT FOUND (PROBE INVALID)\0".ljust(48, b'\0')]
-    ph_strs = ["PH=-/-", "PH=EMU", "PH=GX", "PH=BOTH"]
-    for b in range(9):
-        for d in range(5):
-            for p in range(5):
-                for ph in range(4):
-                    b_str = str(b) if b < 8 else "?"
-                    d_str = str(d) if d < 4 else "?"
-                    p_str = str(p) if p < 4 else "?"
-                    s = f"HDD B={b_str} D={d_str} P={p_str} {ph_strs[ph]}"
-                    assert len(s) < 48
-                    labels_c.append(s.encode('ascii').ljust(48, b'\0'))
-    blob_c = b''.join(labels_c)
-
-    # Page D: OP:%s CL:%s RP:%s (1152 strings, padded to 48 bytes)
-    op_strs = ["OP:SKIP", "OP:0(OK)", "OP:-2(SHORT)", "OP:-3(NO_PRIV)", "OP:-4(DENIED)",
-               "OP:-5(ACC_VIOL)", "OP:-6(NO_ENT)", "OP:-9(BUSY)", "OP:-10(EMPTY)",
-               "OP:-11(STATE)", "OP:-17(PARAM)", "OP:ERR(HEX)"]
-    cl_strs = ["CL:--", "CL:0(OK)", "CL:-2(SHORT)", "CL:-3(NO_PRIV)", "CL:-4(DENIED)",
-               "CL:-5(ACC_VIOL)", "CL:-6(NO_ENT)", "CL:-9(BUSY)", "CL:-10(EMPTY)",
-               "CL:-11(STATE)", "CL:-17(PARAM)", "CL:ERR(HEX)"]
-    rp_strs = ["RP:0(OK)", "RP:-1(ENOENT)", "RP:-6(FA)", "RP:-2(FE)", "RP:-3(FD)",
-               "RP:-4(FC)", "RP:-5(FB)", "RP:ERR"]
-    labels_d = []
-    for op in range(12):
-        for cl in range(12):
-            for rp in range(8):
-                s = f"{op_strs[op]} {cl_strs[cl]} {rp_strs[rp]}"
-                assert len(s) < 48
-                labels_d.append(s.encode('ascii').ljust(48, b'\0'))
-    blob_d = b''.join(labels_d)
-
     symbols = {}
     data = bytearray()
-    symbols['labels_page_a'] = 0x74e930 + len(data)
-    data.extend(blob_a)
-    symbols['labels_page_b'] = 0x74e930 + len(data)
-    data.extend(blob_b)
-    symbols['labels_page_c'] = 0x74e930 + len(data)
-    data.extend(blob_c)
-    symbols['labels_page_d'] = 0x74e930 + len(data)
-    data.extend(blob_d)
+    STRING_WIDTH = 32
+
+    # Standard errors list for field slots 0..6
+    err_suffixes = [
+        "rc=-6 NO_ENT",
+        "rc=-4 DENIED",
+        "rc=-3 NO_PRIV",
+        "rc=-5 ACC_VIOL",
+        "rc=-1 SHORT",
+        "rc=-2 NOTSUP",
+        "rc=ERR"
+    ]
+
+    def make_field_table(page_num, node_tag, field_name, custom_values=None):
+        prefix = f"P{page_num:02d} {node_tag} {field_name}"
+        labels = []
+        # Slots 0..6: errors
+        for err in err_suffixes:
+            s = f"{prefix}: {err}"
+            assert len(s) < STRING_WIDTH, f"Label too long: '{s}'"
+            labels.append(s.encode('ascii').ljust(STRING_WIDTH, b'\0'))
+        # Slots 7..262: values 0..255
+        for val in range(256):
+            if custom_values and val in custom_values:
+                val_str = custom_values[val]
+            else:
+                val_str = f"0x{val:02X}"
+            s = f"{prefix}: {val_str}"
+            assert len(s) < STRING_WIDTH, f"Label too long: '{s}'"
+            labels.append(s.encode('ascii').ljust(STRING_WIDTH, b'\0'))
+        assert len(labels) == 263
+        return b''.join(labels)
+
+    # Page 00: Summary (160 strings)
+    # P00 P1C r=%s h=%s id=%s p=%s
+    r_strs = ["0", "1", "2", "3", "4+"]
+    h_strs = ["0", "1"]
+    modes = ["4/2", "b/d", "500", "hex"]
+    ports = ["0", "1", "2", "?"]
+    labels_00 = []
+    for r in range(5):
+        for h in range(2):
+            for m in range(4):
+                for p in range(4):
+                    s = f"P00 P1C r={r_strs[r]} h={h_strs[h]} id={modes[m]} p={ports[p]}"
+                    assert len(s) < STRING_WIDTH, f"P00 label too long: '{s}'"
+                    labels_00.append(s.encode('ascii').ljust(STRING_WIDTH, b'\0'))
+    assert len(labels_00) == 160
+    symbols['labels_page_00'] = 0x74e930 + len(data)
+    data.extend(b''.join(labels_00))
+
+    # Page 01: Optical type
+    opt_type_custom = {0: "0 (DISK)", 5: "5 (ROM)", 14: "14 (FLASH)"}
+    symbols['labels_page_01'] = 0x74e930 + len(data)
+    data.extend(make_field_table(1, "OPT", "type", opt_type_custom))
+
+    # Page 02: HDD type
+    hdd_type_custom = {0: "0 (DISK)", 5: "5 (ROM)", 14: "14 (FLASH)"}
+    symbols['labels_page_02'] = 0x74e930 + len(data)
+    data.extend(make_field_table(2, "HDD", "type", hdd_type_custom))
+
+    # Page 03: Optical id
+    opt_id_custom = {2: "2 (ROM DEV)"}
+    symbols['labels_page_03'] = 0x74e930 + len(data)
+    data.extend(make_field_table(3, "OPT", "id", opt_id_custom))
+
+    # Page 04: HDD id
+    hdd_id_custom = {0: "0", 3: "3"}
+    symbols['labels_page_04'] = 0x74e930 + len(data)
+    data.extend(make_field_table(4, "HDD", "id", hdd_id_custom))
+
+    # Page 05: Optical port
+    symbols['labels_page_05'] = 0x74e930 + len(data)
+    data.extend(make_field_table(5, "OPT", "port", {0: "0 (PORT0)"}))
+
+    # Page 06: HDD port
+    symbols['labels_page_06'] = 0x74e930 + len(data)
+    data.extend(make_field_table(6, "HDD", "port", {2: "2 (PORT2)"}))
+
+    # Page 07: Optical blk_size (268 strings)
+    # Slots 0..4: errors; 5..11: standard sizes; 12..267: hi-byte
+    def make_blk_table(page_num, node_tag):
+        labels = []
+        prefix = f"P{page_num:02d} {node_tag} blk_sz"
+        errs = ["rc=-6 NO_ENT", "rc=-4 DENIED", "rc=-3 NO_PRIV", "rc=-5 ACC_VIOL", "rc=ERR"]
+        for e in errs:
+            s = f"{prefix}: {e}"
+            assert len(s) < STRING_WIDTH
+            labels.append(s.encode('ascii').ljust(STRING_WIDTH, b'\0'))
+        std_sizes = ["0", "512 (0x200)", "1024", "2048 (0x800)", "4096", "2352 (CD)", "2064 (XA)"]
+        for sz in std_sizes:
+            s = f"{prefix}: {sz}"
+            assert len(s) < STRING_WIDTH
+            labels.append(s.encode('ascii').ljust(STRING_WIDTH, b'\0'))
+        for hi in range(256):
+            s = f"{prefix}: 0x{hi:02X}__"
+            assert len(s) < STRING_WIDTH
+            labels.append(s.encode('ascii').ljust(STRING_WIDTH, b'\0'))
+        assert len(labels) == 268
+        return b''.join(labels)
+
+    symbols['labels_page_07'] = 0x74e930 + len(data)
+    data.extend(make_blk_table(7, "OPT"))
+
+    # Page 08: HDD blk_size
+    symbols['labels_page_08'] = 0x74e930 + len(data)
+    data.extend(make_blk_table(8, "HDD"))
+
+    # Page 09: Optical n_blocks
+    symbols['labels_page_09'] = 0x74e930 + len(data)
+    data.extend(make_field_table(9, "OPT", "n_blks", {0: "0 (NO DISC)"}))
+
+    # Page 10: HDD n_blocks
+    symbols['labels_page_10'] = 0x74e930 + len(data)
+    data.extend(make_field_table(10, "HDD", "n_blks", {0: "0"}))
+
+    # Page 11: Optical n_regs
+    symbols['labels_page_11'] = 0x74e930 + len(data)
+    data.extend(make_field_table(11, "OPT", "n_regs", {0: "0 (NO REGS)"}))
+
+    # Page 12: HDD n_regs
+    symbols['labels_page_12'] = 0x74e930 + len(data)
+    data.extend(make_field_table(12, "HDD", "n_regs", {0: "0"}))
+
+    # Page 13: Optical meddling
+    symbols['labels_page_13'] = 0x74e930 + len(data)
+    data.extend(make_field_table(13, "OPT", "meddl", {0: "0 (OFF)", 1: "1 (ON)"}))
+
+    # Page 14: HDD meddling
+    symbols['labels_page_14'] = 0x74e930 + len(data)
+    data.extend(make_field_table(14, "HDD", "meddl", {0: "0 (OFF)", 1: "1 (ON)"}))
+
+    # Page 15: Optical PCI
+    symbols['labels_page_15'] = 0x74e930 + len(data)
+    data.extend(make_field_table(15, "OPT", "pci_b"))
+
+    # Page 16: HDD PCI
+    symbols['labels_page_16'] = 0x74e930 + len(data)
+    data.extend(make_field_table(16, "HDD", "pci_b"))
+
+    # Page 17: Optical intr/0
+    symbols['labels_page_17'] = 0x74e930 + len(data)
+    data.extend(make_field_table(17, "OPT", "intr0"))
+
+    # Page 18: HDD intr/0
+    symbols['labels_page_18'] = 0x74e930 + len(data)
+    data.extend(make_field_table(18, "HDD", "intr0", {18: "18 (0x12 HDD)"}))
+
+    # Page 19: Optical reg/0 type
+    symbols['labels_page_19'] = 0x74e930 + len(data)
+    data.extend(make_field_table(19, "OPT", "reg0_t"))
+
+    # Page 20: HDD reg/0 type
+    symbols['labels_page_20'] = 0x74e930 + len(data)
+    data.extend(make_field_table(20, "HDD", "reg0_t"))
+
+    # Page 21: Optical intr/1
+    symbols['labels_page_21'] = 0x74e930 + len(data)
+    data.extend(make_field_table(21, "OPT", "intr1"))
+
+    # Page 22: HDD intr/1
+    symbols['labels_page_22'] = 0x74e930 + len(data)
+    data.extend(make_field_table(22, "HDD", "intr1"))
+
+    # Page 23: Bus 4 keys (type, id, num_dev)
+    symbols['labels_page_23'] = 0x74e930 + len(data)
+    data.extend(make_field_table(23, "BUS4", "ndev", {1: "1 dev", 2: "2 devs", 3: "3 devs", 4: "4 devs"}))
 
     # Pad data to 16 bytes
     data.extend(bytes((-len(data)) % 16))
@@ -191,7 +264,7 @@ def build():
     # Build immutable labels
     symbols, label_data = build_labels()
     end = 0x74e930 + len(label_data)
-    assert end < 0x821000, f"extended RO segment exceeds 0x821000: {hex(end)}"
+    assert end < 0x800000, f"extended RO segment exceeds 0x800000: {hex(end)}"
     print(f"Generated immutable labels: {len(label_data)} bytes (ends at {hex(end)})")
 
     # Linker script
@@ -209,13 +282,11 @@ SECTIONS {
 }
 '''
     linker += '\n'.join(f'{k} = {v:#x};' for k, v in symbols.items()) + '\n'
-    linker += 'repo_read = 0x4840;\n'
-    linker += 'lv1_open_device = 0x4820;\n'
-    linker += 'lv1_close_device = 0x4830;\n'
+    linker += 'repo_read = 0x4800;\n'
+    linker += 'native_alloc = 0x4840;\n'
     (H / 'build' / 'link.ld').write_text(linker)
 
     # Compile C payload
-    do_open = int(os.environ.get('PROBE_DO_OPEN', '0'))
     flags = [
         '--target=powerpc64-unknown-linux-gnu', '-mcpu=970', '-mabi=elfv2',
         '-mno-altivec', '-mno-vsx', '-msoft-float', '-ffreestanding',
@@ -223,7 +294,6 @@ SECTIONS {
         '-fno-asynchronous-unwind-tables', '-fno-unwind-tables',
         '-Oz', '-fno-vectorize', '-fno-slp-vectorize',
         '-Wall', '-Wno-unused-function', '-Wextra', '-Werror',
-        f'-DPROBE_DO_OPEN={do_open}',
         '-S', '-emit-llvm'
     ]
     def run(args):
@@ -233,7 +303,7 @@ SECTIONS {
         if r.returncode:
             raise RuntimeError(r.stdout + r.stderr)
 
-    print(f"Compiling probe.c with Clang (PROBE_DO_OPEN={do_open})...")
+    print("Compiling probe.c with Clang...")
     run([LLVM / 'clang.exe', *flags, 'src/probe.c', '-o', 'build/probe.ll'])
     llpath = H / 'build' / 'probe.ll'
     llpath.write_text(llpath.read_text().replace(', target_mem: none', ''))
@@ -276,8 +346,6 @@ SECTIONS {
     trampolines = make_entries(syms)
     payload_bin = (H / 'build' / 'probe.bin').read_bytes()
     # Code slot reservation: 0x4800..0x7FF0 = 14,320 bytes
-    # Trampolines sit at 0x4800..0x4900 (256 bytes)
-    # Payload binary sits at 0x4900
     code = bytearray(0x100 + len(payload_bin))
     code[:0x100] = trampolines
     code[0x100:] = payload_bin
@@ -338,14 +406,14 @@ SECTIONS {
     assert all(a == b or covered[j] for j, (a, b) in enumerate(zip(mapped, e)))
     assert headers(e)[2][0] == ph[0] and headers(e)[2][2][3:] == ph[2][3:]
 
-    # Write patched ELF to local_only/p1b_noopen/
-    out_elf = ROOT / 'local_only' / 'p1b_noopen' / 'ps2_netemu_p1b_noopen.elf'
+    # Write patched ELF to local_only/p1c/
+    out_elf = ROOT / 'local_only' / 'p1c' / 'ps2_netemu_p1c.elf'
     out_elf.write_bytes(e)
     elf_sha = hashlib.sha256(e).hexdigest()
     print(f"Patched ELF written: {out_elf} ({len(e)} bytes, sha256={elf_sha})")
 
     # Repack SELF
-    out_self = ROOT / 'local_only' / 'p1b_noopen' / 'ps2_netemu_p1b_noopen.self'
+    out_self = ROOT / 'local_only' / 'p1c' / 'ps2_netemu_p1c.self'
     print(f"Repacking SELF to {out_self}...")
     pack = runpy.run_path(str(H / 'resign_self_installed.py'))
     pack['main'](out_elf, out_self)
@@ -354,7 +422,7 @@ SECTIONS {
 
     # Round trip verification: decrypt with selfdec.py
     print("Verifying SELF round-trip with selfdec.py...")
-    roundtrip_elf = ROOT / 'local_only' / 'p1b_noopen' / 'roundtrip.elf'
+    roundtrip_elf = ROOT / 'local_only' / 'p1c' / 'roundtrip.elf'
     dec = runpy.run_path(str(H / 'selfdec.py'))
     key_vault = Path(r'C:\Users\remus\ps3buzz-console\raw_capture_debug11\dependencies\dl\key_vault.cpp')
     dec['main'](str(key_vault), str(out_self), str(roundtrip_elf))
@@ -366,8 +434,7 @@ SECTIONS {
 
     # Patch summary
     table = dict(
-        variant='P1B_NOOPEN',
-        probe_do_open=do_open,
+        variant='P1C',
         baseline=str(BASE),
         baseline_sha256=SHA,
         elf_sha256=elf_sha,
@@ -384,8 +451,8 @@ SECTIONS {
         symbols=syms,
         patches=patches
     )
-    (H / 'evidence' / 'p1b_noopen_patch_table.json').write_text(json.dumps(table, indent=2))
-    print(f"Build complete! Table saved to evidence/p1b_noopen_patch_table.json")
+    (H / 'evidence' / 'p1c_patch_table.json').write_text(json.dumps(table, indent=2))
+    print(f"Build complete! Table saved to evidence/p1c_patch_table.json")
 
 if __name__ == '__main__':
     build()

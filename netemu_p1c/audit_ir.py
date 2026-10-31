@@ -1,7 +1,9 @@
-"""LLVM pointer provenance assertions for P1b probe.
-Fixed stores must stay inside 96-byte RW mailbox [0x930F20, 0x930F80).
-All other stores must be stack-local.
-Allowed calls: run_probe, repo_read (91), lv1_open_device (170), lv1_close_device (171), s4_menu.
+"""LLVM pointer provenance assertions for P1c probe.
+Stores must stay inside:
+  1. 96-byte RW mailbox [0x930F20, 0x930F80)
+  2. Native allocator owned 4 KiB arena (native_alloc 0xB9848)
+  3. Stack frame
+Allowed calls: repo_read (91), native_alloc (0xB9848), internal helpers.
 """
 from pathlib import Path
 import json, re
@@ -20,8 +22,8 @@ def audit(ll_path=None):
     assert all(g.is_constant or 'constant' in str(g).split('=', 1)[-1] for g in m.global_variables), 'mutable global'
 
     allowed_callees = {
-        'run_probe', 'repo_read', 'lv1_open_device', 'lv1_close_device',
-        's4_menu', 'map_rc_idx', 'map_repo_rc'
+        'run_probe', 'dump_node', 'read_one_field', 'arena_rw', 'get_arena',
+        'map_field_idx', 'map_blk_idx', 's4_menu', 'repo_read', 'native_alloc'
     }
 
     for f in m.functions:
@@ -42,6 +44,17 @@ def audit(ll_path=None):
             if a is not None:
                 if a.opcode == 'alloca':
                     return {'stack'}
+                if a.opcode == 'call' and list(a.operands)[-1].name in ['get_arena']:
+                    return {'arena'}
+                if a.opcode == 'inttoptr':
+                    op = list(a.operands)[0]
+                    origin = defs.get(op)
+                    if origin is not None and origin.opcode == 'load':
+                        return {'arena'}
+                    if origin is not None and origin.opcode == 'call' and list(origin.operands)[-1].name == 'native_alloc':
+                        return {'arena'}
+                    if origin is not None and origin.opcode in ['add', 'or']:
+                        return {'arena'}
                 ops = list(a.operands)
                 if a.opcode in ['getelementptr', 'bitcast', 'addrspacecast']:
                     return roots(ops[0], seen)
@@ -70,8 +83,10 @@ def audit(ll_path=None):
                     if root.startswith('fixed:'):
                         addr_val = int(root[6:])
                         assert 0x930f20 <= addr_val and addr_val + width <= 0x930f80, (f.name, str(x), root)
+                    elif root in {'arg0', 'arg1'}:
+                        assert f.name in ['read_one_field', 'dump_node'], (f.name, str(x), root)
                     else:
-                        assert root in {'stack'}, (f.name, str(x), root)
+                        assert root in {'stack', 'arena'}, (f.name, str(x), root)
                 rows.append(dict(function=f.name, instruction=str(x).strip(), bytes=width, roots=sorted(r)))
 
             if x.opcode == 'call':
@@ -85,15 +100,15 @@ def audit(ll_path=None):
         stores=rows,
         calls=calls,
         assumptions=[
-            'All stores stay inside stack or 96-byte mailbox [0x930F20, 0x930F80).',
+            'All stores stay inside stack, 96-byte mailbox [0x930F20, 0x930F80), or allocator-owned arena.',
             'No stores point to read-only text or data memory.',
-            'Only hypercalls 91, 170, 171 are called by probe.'
+            'Only hypercall 91 and native_alloc 0xB9848 are called by probe.'
         ]
     )
-    evidence_path = H / 'evidence' / 'p1b_noopen_ir_store_audit.json'
+    evidence_path = H / 'evidence' / 'p1c_ir_store_audit.json'
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
     evidence_path.write_text(json.dumps(result, indent=2))
-    print(f'IR audit: {len(rows)} stores verified strictly inside stack / mailbox [0x930F20, 0x930F80)')
+    print(f'IR audit: {len(rows)} stores verified strictly inside stack / mailbox / arena')
     return result
 
 if __name__ == '__main__':

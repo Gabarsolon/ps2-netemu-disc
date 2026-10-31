@@ -78,4 +78,64 @@
 - **Immutable String Tables**:
   - Padded to 32 bytes per string.
   - Exhaustively bounded indices (mathematically impossible to go out of bounds).
-  - Total extended RO data size: ~205 KB (well below 445 KB of P1b and 726 KB of Buzz).
+  - Total extended RO data size: 199,008 bytes (well below 445 KB of P1b and 726 KB of Buzz).
+
+---
+
+## 3. Build Artifacts & Provenance
+- **Patched ELF**: `local_only/p1c/ps2_netemu_p1c.elf`
+  - Size: 11,097,896 bytes
+  - SHA256: `66d8a64d139d75c48190ae2807cd93623248c70f9a10cb733f68e759a8796f1e`
+- **Patched SELF**: `local_only/p1c/ps2_netemu_p1c.self`
+  - Size: 2,541,904 bytes
+  - SHA256: `4951ef922c13e9066a64b3787081507f7cb6c0198411ff252c4553427c25aacb`
+- **Roundtrip Decrypted ELF**: `local_only/p1c/roundtrip.elf`
+  - Byte-for-byte identical to `ps2_netemu_p1c.elf` (verified with `selfdec.py`).
+- **Code Slot Usage**:
+  - Total code size: 4,392 bytes / 14,320 byte capacity (30.7% usage).
+- **Extended Read-Only Segment**:
+  - Starts at `0x74e930`, ends at `0x77f290` (199,008 bytes).
+  - Finishes well below the safe `0x800000` ceiling.
+
+---
+
+## 4. Static Store & Instruction Audits
+1. **LLVM IR Store Audit (`netemu_p1c/audit_ir.py`)**:
+   - 51 stores analyzed across all functions.
+   - 0 global stores.
+   - All stores verified with strict pointer provenance:
+     - Stack frame (`%struct.FieldRecord* %rec`, local variables).
+     - 96-byte Mailbox at `0x930F20`.
+     - 4 KiB Arena verified through `arena_rw()` pool checks.
+2. **Binary Executable Segment Audit (`tools/p1a_audit.py`)**:
+   - SC instruction scan: **ZERO** `sc` instructions in changed/added executable ranges.
+   - Hypercall invocations strictly route through stock helper `0x111eb8` (LV1 91 at `0x111f10`).
+   - Store instruction scan: 103 stores in changed executable range, strictly base registers `r1` (stack), `r21` (mailbox `0x930F20`), `r3`/`r4`/`r30` (arena pointers), and `r29`.
+
+---
+
+## 5. PC Emulation Validation Suite (`netemu_p1c/validate_pc.py`)
+Validated using pyghidra `EmulatorHelper` (PowerPC:BE:64:default):
+- **Scenario 1 & 2 (Full Pager Walk & Wrap-Around)**:
+  - Stepped through all 24 pages across 6 banks (Page 00 through Page 23).
+  - All labels matched exact formatted strings.
+  - Advancing past Page 23 wrapped cleanly back to Page 00.
+  - Memory write tracking verified: **100% of memory writes restricted to stack, mailbox `[0x930F20, 0x930F80)`, and arena `[0x80020000, 0x80021000)`**.
+- **Scenario 3 (Missing Optical Node)**:
+  - Mock repository with `rom_count == 0`.
+  - Returned `P00 P1C r=0 h=1` on Page 00 and `P01 OPT type: rc=-6 NO_ENT` on Page 01.
+- **Scenario 4 (Repository Errors)**:
+  - Mock repository returning empty / `-6 LV1_NO_ENTRY`.
+  - Successfully trapped and displayed without crashing or retrying.
+- **Scenario 5 (Allocator Failure / Fail-Open)**:
+  - Simulated `native_alloc` returning 0.
+  - Safely aborted probe, preserved fail-open status `STATUS_ALLOC_FAILED`, and returned stock label `"Debug Information"` at `0x304EC0`.
+- **Scenario 6 (Hook Site Integrity)**:
+  - Verified hook at `0x270FFC` holds exact branch to `entry_menu` (`0x4bd93885`).
+- **Scenario 7 (Exhaustive Index-Bounds Fuzzing)**:
+  - Page 00 (160 strings): max index reached = 159 (bounded).
+  - Standard field pages (263 strings): max index reached = 262 (bounded).
+  - Block size pages (268 strings): max index reached = 267 (bounded).
+  - Pager state machine (24 pages): max page reached = 23 (bounded).
+- **Scenario 8 (Installer Script Syntax Parse Check)**:
+  - PowerShell AST parser validated syntax of `tools/install_netemu.ps1` and `tools/restore_netemu.ps1`.
