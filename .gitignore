@@ -50,3 +50,7 @@ netemu_p1f/settings/
 netemu_p1f/tmp/
 netemu_p1f/build/
 netemu_p1f/evidence/*patch_table*.json
+netemu_p1g/settings/
+netemu_p1g/tmp/
+netemu_p1g/build/
+netemu_p1g/evidence/*patch_table*.json

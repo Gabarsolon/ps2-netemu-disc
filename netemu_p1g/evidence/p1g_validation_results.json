@@ -1,0 +1,24 @@
+{
+  "p1g_validation": {
+    "G0": {
+      "passed": true,
+      "elf_sha256": "f911700f7953a196abe5dea2e2c2555a46ed3ccbf96d190f59b7807d4181aa90"
+    },
+    "G1": {
+      "passed": true,
+      "elf_sha256": "a4c3adc371dfa8c0e231c8aa0f03403221ad010484ea838de3635bca2abc72f4"
+    },
+    "G2": {
+      "passed": true,
+      "elf_sha256": "4aa6465a30582b630e94e47074e39a334ecf2cfda1e9f6bcfa248d2122d783ee"
+    },
+    "G3": {
+      "passed": true,
+      "elf_sha256": "f1ff8a328617f111876efcf114d2a5a97483fcdff98ce222bddf4496d2cdf30f"
+    }
+  },
+  "fuzz_index_bounds_passed": true,
+  "p1a_audit_passed": true,
+  "installer_syntax_passed": true,
+  "all_tests_passed": true
+}
