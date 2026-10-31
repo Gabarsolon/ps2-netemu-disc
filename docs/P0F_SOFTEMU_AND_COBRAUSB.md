@@ -23,3 +23,8 @@ A PSL1GHT file browser that launches ELF/SELF files from LV2. The PS2 emulators 
 ## What would help
 1. `ps2_softemu.self` (4.01, unpatched preferred) in `local_only/`: how a non-BC (slim) emulator opens the drive, auth sequence, which partition type.
 2. Open question the softemu could settle: is the drive assigned to the partition that runs softemu (parameter `0x8202`) but not to the netemu partition (`0x8204`)? (UNKNOWN)
+
+## ps2_softemu obtained (2026-10-31)
+- Source: owner's official 3.55 `PS3UPDAT.PUP` (`C:\Users\remus\Downloads\3.55-OFW-PS3UPDAT.PUP`, sha256 `334e60a4ef5843a688c1c6aebf0951c3259429233c7a5aca5a24f0edad78a192`, version.txt `3.55`). Unpacked with `tools/pup_extract.py` (PUP entry 0x300 tar -> `dev_flash_NNN` SCE type 3 files decrypted with the public SCEPKG ERK/RIV constants from RPCS3). Extracted files and ELFs stay in `local_only/fw355/` (never git).
+- PROVEN (PC): `dev_flash/ps2emu/ps2_softemu.self` md5 `f95cc406bf1b4ec44481bae1195ca94c` (the checksum a forum paste quoted for the 3.55 file), size 2058104; also `ps2_emu.self` (md5 `89c71599...`) and `ps2_gxemu.self` (md5 `81037e5c...`). `selfdec.py` decrypts all three (LV2-type SELF, version 0x0003005500000000) to ELF.
+- PROVEN (PC): the decrypted softemu ELF has LV1 248 (`device command`) `sc` sites at 0x88c0c and 0x88d54, inside the functions CobraUSB names `cdvd_send_device_command_symbol` (0x88B9C) and `cdvd_send_atapi_command_symbol` (0x88C88) for softemu, and LV1 170 (open_device) sites at 0x88814 and 0x8e08c, LV1 171 at 0x8c94c / 0x67d00. So the CobraUSB 3.55 symbol table matches this binary.
