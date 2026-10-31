@@ -1,0 +1,61 @@
+{
+  "variant_A": {
+    "variant": "A",
+    "elf_sha256": "fe27cb45ab4b730bb686bf47102181b76c0f0662e424d4afb34a24e679f9ce80",
+    "tests": {
+      "code_size": {
+        "passed": true,
+        "code_size_bytes": 2160,
+        "slot_capacity_bytes": 14320,
+        "slot_usage_pct": 15.1
+      },
+      "store_audit": {
+        "passed": true,
+        "ir_stores_verified": 50,
+        "asm_stores_scanned": 78,
+        "sc_sites": [
+          [
+            "0x4828",
+            "0x44000002"
+          ],
+          [
+            "0x4838",
+            "0x44000002"
+          ]
+        ]
+      },
+      "scenarios_passed": true
+    }
+  },
+  "variant_B": {
+    "variant": "B",
+    "elf_sha256": "8f0a222d14ead44b533e9174575e321658dae801e8be072455f3fa2c512853df",
+    "tests": {
+      "code_size": {
+        "passed": true,
+        "code_size_bytes": 2152,
+        "slot_capacity_bytes": 14320,
+        "slot_usage_pct": 15.0
+      },
+      "store_audit": {
+        "passed": true,
+        "ir_stores_verified": 50,
+        "asm_stores_scanned": 78,
+        "sc_sites": [
+          [
+            "0x4828",
+            "0x44000002"
+          ],
+          [
+            "0x4838",
+            "0x44000002"
+          ]
+        ]
+      },
+      "scenarios_passed": true
+    }
+  },
+  "fuzz_index_bounds_passed": true,
+  "installer_syntax_passed": true,
+  "all_tests_passed": true
+}

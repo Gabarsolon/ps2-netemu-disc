@@ -1,0 +1,28 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0     4900     1 . = 0x4900
+            4900             4900      68c     4 .text
+            4900             4900      68c     4         build/probe.o:(.text)
+            4900             4900      644     1                 s4_menu
+            4f44             4f44       48     1                 map_rc_idx
+            4f8c             4f8c       1a     4 .rodata
+            4f8c             4f8c       1a     4         build/probe.o:(.rodata)
+            4fa8             4fa8        8     8 .got
+            4fa8             4fa8        8     8         <internal>:(.got)
+            4fb0             4fb0        0     1 . = ALIGN(8)
+            4fb0             4fb0       28     8 .toc
+            4fb0             4fb0       28     8         build/probe.o:(.toc)
+            4fd8             4fd8        0     1 labels_page_a = 0x74e930
+            4fd8             4fd8        0     1 labels_page_b = 0x74f740
+            4fd8             4fd8        0     1 labels_page_c = 0x7a3770
+            4fd8             4fd8        0     1 labels_page_d = 0x7ae060
+            4fd8             4fd8        0     1 repo_read = 0x4840
+            4fd8             4fd8        0     1 lv1_open_device = 0x4820
+            4fd8             4fd8        0     1 lv1_close_device = 0x4830
+            4fd8             4fd8        0     8 .branch_lt
+            4fd8             4fd8        0     8         <internal>:(.branch_lt)
+               0                0      120     8 .symtab
+               0                0      120     8         <internal>:(.symtab)
+               0                0       3e     1 .shstrtab
+               0                0       3e     1         <internal>:(.shstrtab)
+               0                0       85     1 .strtab
+               0                0       85     1         <internal>:(.strtab)
