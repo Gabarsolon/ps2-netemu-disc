@@ -1,5 +1,7 @@
 # P1b result (console test, 2026-10-31)
 
+Static follow-up: [P0E optical-open analysis](P0E_OPTICAL_OPEN_ANALYSIS.md) verifies both phat paths, bridge initialization, ranked causes, and exact read-only P1c repository keys.
+
 Build `local_only/p1b/ps2_netemu_p1b.self` (sha256 `b49e86f2738af08177207be4d1cfe8253139f0ec292a033dc4065d2e6eba2ee8`): repository scan (LV1 91) plus ONE `lv1_open_device` (170) on the optical node, close (171) if it succeeded.
 
 ## Observation
