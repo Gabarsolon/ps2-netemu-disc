@@ -1,0 +1,51 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0     4900     1 . = 0x4900
+            4900             4900      f00     4 .text
+            4900             4900      f00     4         build/probe.o:(.text)
+            4900             4900      910     1                 s4_menu
+            5210             5210       58     1                 get_arena
+            5268             5268       8c     1                 map_field_idx
+            52f4             52f4       dc     1                 map_blk_idx
+            53d0             53d0       7c     1                 arena_rw
+            544c             544c      304     1                 dump_node
+            5750             5750       b0     1                 read_one_field
+            5800             5800        8     8 .got
+            5800             5800        8     8         <internal>:(.got)
+            5808             5808        0     1 . = ALIGN(8)
+            5808             5808       c0     8 .toc
+            5808             5808       c0     8         build/probe.o:(.toc)
+            58c8             58c8        0     1 labels_page_00 = 0x74e930
+            58c8             58c8        0     1 labels_page_01 = 0x74fd30
+            58c8             58c8        0     1 labels_page_02 = 0x751e10
+            58c8             58c8        0     1 labels_page_03 = 0x753ef0
+            58c8             58c8        0     1 labels_page_04 = 0x755fd0
+            58c8             58c8        0     1 labels_page_05 = 0x7580b0
+            58c8             58c8        0     1 labels_page_06 = 0x75a190
+            58c8             58c8        0     1 labels_page_07 = 0x75c270
+            58c8             58c8        0     1 labels_page_08 = 0x75e3f0
+            58c8             58c8        0     1 labels_page_09 = 0x760570
+            58c8             58c8        0     1 labels_page_10 = 0x762650
+            58c8             58c8        0     1 labels_page_11 = 0x764730
+            58c8             58c8        0     1 labels_page_12 = 0x766810
+            58c8             58c8        0     1 labels_page_13 = 0x7688f0
+            58c8             58c8        0     1 labels_page_14 = 0x76a9d0
+            58c8             58c8        0     1 labels_page_15 = 0x76cab0
+            58c8             58c8        0     1 labels_page_16 = 0x76eb90
+            58c8             58c8        0     1 labels_page_17 = 0x770c70
+            58c8             58c8        0     1 labels_page_18 = 0x772d50
+            58c8             58c8        0     1 labels_page_19 = 0x774e30
+            58c8             58c8        0     1 labels_page_20 = 0x776f10
+            58c8             58c8        0     1 labels_page_21 = 0x778ff0
+            58c8             58c8        0     1 labels_page_22 = 0x77b0d0
+            58c8             58c8        0     1 labels_page_23 = 0x77d1b0
+            58c8             58c8        0     1 repo_read = 0x4800
+            58c8             58c8        0     1 native_alloc = 0x4840
+            58c8             58c8        0     1 native_clock = 0x48c0
+            58c8             58c8        0     8 .branch_lt
+            58c8             58c8        0     8         <internal>:(.branch_lt)
+               0                0      378     8 .symtab
+               0                0      378     8         <internal>:(.symtab)
+               0                0       36     1 .shstrtab
+               0                0       36     1         <internal>:(.shstrtab)
+               0                0      1e9     1 .strtab
+               0                0      1e9     1         <internal>:(.strtab)
