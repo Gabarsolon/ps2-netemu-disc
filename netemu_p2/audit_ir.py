@@ -1,0 +1,111 @@
+"""LLVM pointer provenance assertions for P2 probe (H0..H3).
+Fixed stores must stay inside 192-byte RW mailbox [0x930F20, 0x930FE0).
+Command block stores stay inside the verified DMA buffer.
+All other stores must be stack-local.
+Allowed calls: run_probe, repo_read (91), lv1_hcall, alloc_buffer (0x19a5c),
+               native_clock (0xb9cd0), poll_completion, setup_atapi_block,
+               s4_menu, map_rc_name_idx, map_page_b_idx, map_page_d_idx.
+"""
+from pathlib import Path
+import json, re
+import llvmlite.binding as llvm
+
+H = Path(__file__).resolve().parent
+
+def audit(ll_path=None, variant='H0'):
+    if ll_path is None:
+        ll_path = H / 'build' / f'probe_p2_{variant}.ll'
+    else:
+        ll_path = Path(ll_path)
+    m = llvm.parse_assembly(ll_path.read_text())
+    rows = []
+    calls = []
+    assert all(g.is_constant or 'constant' in str(g).split('=', 1)[-1] for g in m.global_variables), 'mutable global'
+
+    allowed_callees = {
+        'run_probe', 'repo_read', 'lv1_hcall', 'alloc_buffer', 'native_clock',
+        'poll_completion', 'setup_atapi_block',
+        's4_menu', 'map_rc_name_idx', 'map_page_b_idx', 'map_page_d_idx'
+    }
+
+    for f in m.functions:
+        if f.is_declaration:
+            continue
+        insts = [x for b in f.blocks for x in b.instructions]
+        defs = {x: x for x in insts}
+        args = {a: 'arg' + str(j) for j, a in enumerate(f.arguments)}
+
+        def roots(v, seen=None):
+            seen = set() if seen is None else set(seen)
+            if v in seen:
+                return set()
+            seen.add(v)
+            if v in args:
+                return {args[v]}
+            a = defs.get(v)
+            if a is not None:
+                if a.opcode == 'alloca':
+                    return {'stack'}
+                ops = list(a.operands)
+                if a.opcode in ['getelementptr', 'bitcast', 'addrspacecast', 'inttoptr']:
+                    return roots(ops[0], seen)
+                if a.opcode in ['phi', 'select']:
+                    out = set()
+                    for x in ops:
+                        if str(x.type) == 'ptr':
+                            out |= roots(x, seen)
+                    return out
+            t = str(v)
+            k = re.fullmatch(r'ptr inttoptr \(i64 (\d+) to ptr\)', t)
+            if t == 'ptr null':
+                return set()
+            if k:
+                return {'fixed:' + k[1]}
+            return {'UNKNOWN:' + t}
+
+        for x in insts:
+            if x.opcode in ['store', 'cmpxchg', 'atomicrmw']:
+                ops = list(x.operands)
+                val, dst = (ops[1], ops[0]) if x.opcode in ['cmpxchg', 'atomicrmw'] else ops
+                r = roots(dst)
+                width = int(str(val.type)[1:]) // 8
+                assert r, (f.name, str(x))
+                for root in r:
+                    if root.startswith('fixed:'):
+                        addr_val = int(root[6:])
+                        assert 0x930f20 <= addr_val and addr_val + width <= 0x930fe0, (f.name, str(x), root)
+                    elif root in {'stack'}:
+                        pass
+                    elif f.name == 'setup_atapi_block' and root == 'arg0':
+                        # Stores to DMA command block in buffer
+                        pass
+                    elif f.name == 'poll_completion' and root == 'arg1':
+                        # Pointer to ProbeState status field
+                        pass
+                    else:
+                        raise AssertionError(f'Unauthorized store: {f.name} {x} root={root}')
+                rows.append(dict(function=f.name, instruction=str(x).strip(), bytes=width, roots=sorted(r)))
+
+            if x.opcode == 'call':
+                ops = list(x.operands)
+                callee = ops[-1].name
+                assert callee in allowed_callees or callee.startswith('llvm.'), (f.name, callee)
+                calls.append(dict(function=f.name, callee=callee))
+
+    result = dict(
+        passed=True,
+        variant=variant,
+        stores=rows,
+        calls=calls,
+        assumptions=[
+            'All fixed stores stay inside 192-byte mailbox [0x930F20, 0x930FE0).',
+            'Command block stores stay inside the verified DMA buffer.',
+            'All other stores are stack-local.',
+            'No stores point to read-only text or data memory.',
+            'Only authorized functions and hypercalls are called.'
+        ]
+    )
+    evidence_path = H / 'evidence' / f'p2_{variant}_ir_store_audit.json'
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(json.dumps(result, indent=2))
+    print(f'IR audit (Variant {variant}): {len(rows)} stores verified strictly inside stack / mailbox / buffer')

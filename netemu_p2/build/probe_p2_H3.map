@@ -1,0 +1,31 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0     4a00     1 . = 0x4A00
+            4a00             4a00      e18     4 .text
+            4a00             4a00      e18     4         build/probe_p2_H3.o:(.text)
+            4a00             4a00      cac     1                 s4_menu
+            56ac             56ac       68     1                 setup_atapi_block
+            5714             5714      104     1                 poll_completion
+            5818             5818       1a     4 .rodata
+            5818             5818       1a     4         build/probe_p2_H3.o:(.rodata)
+            5818             5818        7     1                 str_sb_opt
+            5838             5838        8     8 .got
+            5838             5838        8     8         <internal>:(.got)
+            5840             5840        0     1 . = ALIGN(8)
+            5840             5840       28     8 .toc
+            5840             5840       28     8         build/probe_p2_H3.o:(.toc)
+            5868             5868        0     1 labels_page_a = 0x74e930
+            5868             5868        0     1 labels_page_b = 0x750b70
+            5868             5868        0     1 labels_page_c = 0x758ff0
+            5868             5868        0     1 labels_page_d = 0x7591b0
+            5868             5868        0     1 repo_read = 0x48c0
+            5868             5868        0     1 native_clock = 0x4900
+            5868             5868        0     1 alloc_buffer = 0x4910
+            5868             5868        0     1 lv1_hcall = 0x4800
+            5868             5868        0     8 .branch_lt
+            5868             5868        0     8         <internal>:(.branch_lt)
+               0                0      168     8 .symtab
+               0                0      168     8         <internal>:(.symtab)
+               0                0       3e     1 .shstrtab
+               0                0       3e     1         <internal>:(.shstrtab)
+               0                0       aa     1 .strtab
+               0                0       aa     1         <internal>:(.strtab)

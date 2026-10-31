@@ -1,0 +1,28 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0     4a00     1 . = 0x4A00
+            4a00             4a00      850     4 .text
+            4a00             4a00      850     4         build/probe_p2_H0.o:(.text)
+            4a00             4a00      850     1                 s4_menu
+            5250             5250       12     4 .rodata
+            5250             5250       12     4         build/probe_p2_H0.o:(.rodata)
+            5268             5268        8     8 .got
+            5268             5268        8     8         <internal>:(.got)
+            5270             5270        0     1 . = ALIGN(8)
+            5270             5270       28     8 .toc
+            5270             5270       28     8         build/probe_p2_H0.o:(.toc)
+            5298             5298        0     1 labels_page_a = 0x74e930
+            5298             5298        0     1 labels_page_b = 0x750b70
+            5298             5298        0     1 labels_page_c = 0x758ff0
+            5298             5298        0     1 labels_page_d = 0x759270
+            5298             5298        0     1 repo_read = 0x48c0
+            5298             5298        0     1 native_clock = 0x4900
+            5298             5298        0     1 alloc_buffer = 0x4910
+            5298             5298        0     1 lv1_hcall = 0x4800
+            5298             5298        0     8 .branch_lt
+            5298             5298        0     8         <internal>:(.branch_lt)
+               0                0      120     8 .symtab
+               0                0      120     8         <internal>:(.symtab)
+               0                0       3e     1 .shstrtab
+               0                0       3e     1         <internal>:(.shstrtab)
+               0                0       7d     1 .strtab
+               0                0       7d     1         <internal>:(.strtab)

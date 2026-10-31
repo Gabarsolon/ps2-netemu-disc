@@ -1,0 +1,29 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0     4a00     1 . = 0x4A00
+            4a00             4a00      988     4 .text
+            4a00             4a00      988     4         build/probe_p2_H1.o:(.text)
+            4a00             4a00      988     1                 s4_menu
+            5388             5388       1a     4 .rodata
+            5388             5388       1a     4         build/probe_p2_H1.o:(.rodata)
+            5388             5388        7     1                 str_sb_opt
+            53a8             53a8        8     8 .got
+            53a8             53a8        8     8         <internal>:(.got)
+            53b0             53b0        0     1 . = ALIGN(8)
+            53b0             53b0       28     8 .toc
+            53b0             53b0       28     8         build/probe_p2_H1.o:(.toc)
+            53d8             53d8        0     1 labels_page_a = 0x74e930
+            53d8             53d8        0     1 labels_page_b = 0x750b70
+            53d8             53d8        0     1 labels_page_c = 0x758ff0
+            53d8             53d8        0     1 labels_page_d = 0x7590f0
+            53d8             53d8        0     1 repo_read = 0x48c0
+            53d8             53d8        0     1 native_clock = 0x4900
+            53d8             53d8        0     1 alloc_buffer = 0x4910
+            53d8             53d8        0     1 lv1_hcall = 0x4800
+            53d8             53d8        0     8 .branch_lt
+            53d8             53d8        0     8         <internal>:(.branch_lt)
+               0                0      138     8 .symtab
+               0                0      138     8         <internal>:(.symtab)
+               0                0       3e     1 .shstrtab
+               0                0       3e     1         <internal>:(.shstrtab)
+               0                0       88     1 .strtab
+               0                0       88     1         <internal>:(.strtab)
