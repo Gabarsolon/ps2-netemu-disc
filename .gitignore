@@ -26,3 +26,7 @@ netemu_p1b/settings/
 netemu_p1b/tmp/
 netemu_p1b/build/
 netemu_p1b/evidence/*patch_table*.json
+netemu_p1b_noopen/settings/
+netemu_p1b_noopen/tmp/
+netemu_p1b_noopen/build/
+netemu_p1b_noopen/evidence/*patch_table*.json
