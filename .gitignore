@@ -62,3 +62,7 @@ netemu_p2b/settings/
 netemu_p2b/tmp/
 netemu_p2b/build/
 netemu_p2b/evidence/*patch_table*.json
+netemu_p2c/settings/
+netemu_p2c/tmp/
+netemu_p2c/build/
+netemu_p2c/evidence/*patch_table*.json
