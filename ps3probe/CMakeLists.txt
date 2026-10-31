@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.20)
+project(ps2disc_probe C)
+include(ps3-self)
+add_executable(PS2DiscProbe main.c probe.c ui_layout.c)
+target_compile_features(PS2DiscProbe PRIVATE c_std_11)
+target_compile_options(PS2DiscProbe PRIVATE -O2 -Wall -Wextra -Werror -Wno-misleading-indentation)
+target_link_libraries(PS2DiscProbe PRIVATE rsx gcm_cmd gcm_sys io sysutil rt lv2)
+ps3_add_self(PS2DiscProbe OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/app")

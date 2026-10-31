@@ -16,3 +16,9 @@ __pycache__/
 # Ghidra projects
 *.gpr
 *.rep/
+
+# build scratch
+netemu/settings/
+netemu/tmp/
+netemu/build/
+netemu/evidence/p1a_patch_table.json

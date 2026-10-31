@@ -1,0 +1,62 @@
+{
+  "elf_sha256": "2dea15b3c0732b9ffa7869bfecddd32d0ac6275a3343a27c710fe94ad75549a5",
+  "tests": {
+    "code_size": {
+      "passed": true,
+      "code_size_bytes": 1840,
+      "slot_capacity_bytes": 14320,
+      "slot_usage_pct": 12.8
+    },
+    "store_audit": {
+      "passed": true,
+      "ir_stores_verified": 43,
+      "asm_stores_scanned": 71,
+      "provenance": "All stores verified inside stack or mailbox [0x930F20, 0x930F80)"
+    },
+    "scenario_1_optical_present": {
+      "passed": true,
+      "page_a": "P1A DONE devs=2 rom=1 hdd=1",
+      "page_b": "ROM B=05 D=00 P=0 T=5",
+      "page_c": "HDD B=4 D=0 P=2 PH=EMU",
+      "page_d": "ERR rc=-1 sb=B5 n=32+",
+      "hypercalls": 54
+    },
+    "scenario_2_no_optical": {
+      "passed": true,
+      "page_a": "P1A DONE devs=1 rom=0 hdd=1",
+      "page_b": "P1A NO ROM DEV (R=0)",
+      "page_c": "HDD B=4 D=0 P=2 PH=-/-"
+    },
+    "scenario_3_repo_errors": {
+      "passed": true,
+      "page_a": "P1A DONE devs=0 rom=0 hdd=0",
+      "page_c": "HDD: NOT FOUND (PROBE INVALID)",
+      "page_d": "ERR rc=-1 sb=NO n=<32"
+    },
+    "scenario_4_hdd_control": {
+      "passed": true,
+      "control_location": "Bus 4, Dev 0, Port 2, Type 0",
+      "verified_in": [
+        "Scenario 1",
+        "Scenario 2"
+      ]
+    },
+    "scenario_5_fail_open": {
+      "passed": true,
+      "stock_label_addr": "0x304EC0",
+      "stock_string": "Debug Information",
+      "policy": "Returns stock pointer 0x304EC0 if probe fails or is not ready"
+    },
+    "scenario_6_repeated_menu": {
+      "passed": true,
+      "first_open_hypercalls": 54,
+      "subsequent_opens_hypercalls": 54,
+      "once_only_verified": true
+    },
+    "installer_parse": {
+      "passed": true,
+      "install_netemu_errors": 0,
+      "restore_netemu_errors": 0
+    }
+  }
+}
