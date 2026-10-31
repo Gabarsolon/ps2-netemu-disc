@@ -54,12 +54,25 @@ for lo, hi, _ in changed[:80]:
 EXEC_LIMIT = 0x300000
 stores = {0x90: 'stw', 0x94: 'stwu', 0x98: 'stb', 0x9C: 'stbu', 0xB0: 'sth', 0xB4: 'sthu', 0xD0: 'stfs', 0xD4: 'stfsu', 0xD8: 'stfd', 0xDC: 'stfdu'}
 sc_list, st_list, other = [], [], []
+# Changed ranges are bytewise and can cut words in half (zero bytes equal stock), so
+# re-read every touched word, 4-byte aligned, from the new image.
+words = set()
 for lo, hi, data in changed:
     if lo >= EXEC_LIMIT:
         continue
-    for k in range(0, len(data) - 3, 4):
-        w, = struct.unpack_from('>I', data, k)
-        va = lo + k
+    for va in range((lo // 4) * 4, hi, 4):
+        words.add(va)
+def seg_word(d, ph, va):
+    for p in ph:
+        if p[0] == 1 and p[3] <= va < p[3] + p[5]:
+            return struct.unpack_from('>I', d, p[2] + va - p[3])[0]
+    return None
+for va in sorted(words):
+    if True:
+        w = seg_word(b, pb, va)
+        if w is None:
+            continue
+        data = None; lo = va; k = 0
         if w & 0xFC000003 == 0x44000002:
             sc_list.append((va, (w >> 5) & 0x7F))
         op = w >> 26

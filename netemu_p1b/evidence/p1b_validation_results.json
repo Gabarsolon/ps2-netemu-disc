@@ -1,0 +1,28 @@
+{
+  "elf_sha256": "ef55ecb4b5bdf7ed76f20ab4494237e196973130b5dfd9470873572789adcf3b",
+  "tests": {
+    "code_size": {
+      "passed": true,
+      "code_size_bytes": 2280,
+      "slot_capacity_bytes": 14320,
+      "slot_usage_pct": 15.9
+    },
+    "store_audit": {
+      "passed": true,
+      "ir_stores_verified": 55,
+      "asm_stores_scanned": 83,
+      "sc_sites": [
+        [
+          "0x4828",
+          "0x44000002"
+        ],
+        [
+          "0x4838",
+          "0x44000002"
+        ]
+      ],
+      "provenance": "All stores verified inside stack or mailbox [0x930F20, 0x930F80)"
+    },
+    "all_scenarios_passed": true
+  }
+}

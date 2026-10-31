@@ -22,3 +22,7 @@ netemu/settings/
 netemu/tmp/
 netemu/build/
 netemu/evidence/p1a_patch_table.json
+netemu_p1b/settings/
+netemu_p1b/tmp/
+netemu_p1b/build/
+netemu_p1b/evidence/*patch_table*.json
