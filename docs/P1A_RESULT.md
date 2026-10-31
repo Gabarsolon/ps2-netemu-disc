@@ -17,3 +17,7 @@ Label text as reported by the owner (typed from the `Debug Information` row, not
 ## Next
 
 P1b: attempt `open_device` (LV1 170) on the found ROM node with the ids read from the repository, log the return code, then close (171). No reads, no drive commands. Needs the owner's approval; worst case a hang or reboot of the partition.
+
+## Test condition
+
+- **PROVEN (owner):** no disc was inserted during this test. The repository node describes the drive hardware, so the finding does not depend on a disc. For P1b run once with no disc and once with the PS2 DVD inserted and compare the return codes; P2 (sector reads) needs the PS2 disc.
