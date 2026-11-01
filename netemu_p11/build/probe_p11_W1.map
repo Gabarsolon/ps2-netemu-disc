@@ -1,0 +1,56 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0     4b00     1 . = 0x4B00
+            4b00             4b00     2d8c     4 .text
+            4b00             4b00     2d8c     4         build/probe_p11_W1.o:(.text)
+            4b00             4b00      1f0     1                 hddlog_init
+            4cf0             4cf0       78     1                 is_hdd_log_safe
+            4d68             4d68      2b4     1                 hddlog_write
+            501c             501c     18e4     1                 s4_menu
+            6900             6900       58     1                 get_arena
+            6958             6958       7c     1                 arena_rw
+            69d4             69d4       30     1                 append_str
+            6a04             6a04       a0     1                 format_dec
+            6aa4             6aa4       20     1                 format_hex64
+            6ac4             6ac4       bc     1                 setup_atapi_block
+            6b80             6b80      154     1                 poll_completion
+            6cd4             6cd4       2c     1                 prefill_buffer
+            6d00             6d00       4c     1                 format_ascii
+            6d4c             6d4c       20     1                 format_hex32
+            6d6c             6d6c      18c     1                 query_vuart_param
+            6ef8             6ef8       a8     1                 format_auth_request
+            6fa0             6fa0       40     1                 format_s32
+            6fe0             6fe0      550     1                 execute_read_test
+            7530             7530       50     1                 format_hex_n
+            7580             7580       6c     1                 format_bytes_hex
+            75ec             75ec      2a0     1                 do_request_sense
+            7890             7890      690     8 .data
+            7890             7890      690     8         build/probe_p11_W1.o:(.data.rel.ro)
+            7bc3             7bc3       11     1                 HEX_DIGITS
+            7be6             7be6       14     1                 hddlog_init.path
+            7bfa             7bfa       14     1                 hddlog_write.path
+            7d90             7d90       20     1                 class_to_str.STRS
+            7ee8             7ee8       38     1                 auth_verdict_to_str.STRS
+            7f20             7f20        0     8 .branch_lt
+            7f20             7f20        0     8         <internal>:(.branch_lt)
+            7f20             7f20        8     8 .got
+            7f20             7f20        8     8         <internal>:(.got)
+            7f28             7f28        8     8 .toc
+            7f28             7f28        8     8         build/probe_p11_W1.o:(.toc)
+            7f30             7f30        0     1 repo_read = 0x48c0
+            7f30             7f30        0     1 native_clock = 0x4900
+            7f30             7f30        0     1 native_alloc = 0x4920
+            7f30             7f30        0     1 stock_ufs_open = 0x4960
+            7f30             7f30        0     1 stock_ufs_close = 0x49a0
+            7f30             7f30        0     1 stock_raw_read = 0x49e0
+            7f30             7f30        0     1 stock_raw_write = 0x4a20
+            7f30             7f30        0     1 stock_hdd_cache_flush = 0x4a60
+            7f30             7f30        0     1 get_r2 = 0x4aa0
+            7f30             7f30        0     1 lv1_hcall = 0x4800
+               0                0       c9     1 .comment
+               0                0       c9     1         <internal>:(.comment)
+               0                0      3a8     8 .symtab
+               0                0      3a8     8         <internal>:(.symtab)
+               0                0       45     1 .shstrtab
+               0                0       45     1         <internal>:(.shstrtab)
+               0                0      215     1 .strtab
+               0                0      215     1         <internal>:(.strtab)

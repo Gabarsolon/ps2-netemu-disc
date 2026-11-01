@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-01. P10 V1 on console: VUART port 10 answers for the netemu partition (rc 0 for param queries and zero-length read/write; no -6). READ(10) still returns no data. Next: send the real disc-auth request (needs owner go-ahead)._
+_Last update: 2026-11-01. P11 (agy): independent re-derivation corrected the P10 request layout (32-bit fields, LAID at +0x30, disc-type byte 0x13 for DVD-5). W1 build ready: sends the real disc-auth request once, bounded polling, keys scrubbed. Needs a console test._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

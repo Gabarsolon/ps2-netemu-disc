@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-01",
-  "note": "P10 V1 on console: VUART port 10 answers for the netemu partition (rc 0 for param queries and zero-length read/write; no -6). READ(10) still returns no data. Next: send the real disc-auth request (needs owner go-ahead).",
+  "note": "P11 (agy): independent re-derivation corrected the P10 request layout (32-bit fields, LAID at +0x30, disc-type byte 0x13 for DVD-5). W1 build ready: sends the real disc-auth request once, bounded polling, keys scrubbed. Needs a console test.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
