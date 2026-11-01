@@ -74,3 +74,7 @@ netemu_p3b/settings/
 netemu_p3b/tmp/
 netemu_p3b/build/
 netemu_p3b/evidence/*patch_table*.json
+netemu_p2e/settings/
+netemu_p2e/tmp/
+netemu_p2e/build/
+netemu_p2e/evidence/*patch_table*.json

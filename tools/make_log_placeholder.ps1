@@ -39,8 +39,17 @@ try {
   if (Test-Path -LiteralPath $checkOutput) { Remove-Item -LiteralPath $checkOutput -Force }
 
   $probeSuccess = $false
-  & curl.exe --fail --silent --show-error --max-time 15 -o $checkOutput "ftp://$Ps3Host$RemotePath" 2>$null
-  if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $checkOutput)) {
+  # Windows PowerShell 5.1 turns native stderr into a terminating error under $ErrorActionPreference = 'Stop':
+  # curl reports "file does not exist" (exit 78) on stderr, which is the EXPECTED answer on a first run.
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    & curl.exe --fail --silent --max-time 15 -o $checkOutput "ftp://$Ps3Host$RemotePath" 2>&1 | Out-Null
+    $probeExit = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $prevEap
+  }
+  if ($probeExit -eq 0 -and (Test-Path -LiteralPath $checkOutput)) {
     $existingBytes = [System.IO.File]::ReadAllBytes($checkOutput)
     $existingLen = $existingBytes.Length
     Write-Host "Remote file already exists (size: $existingLen bytes)."

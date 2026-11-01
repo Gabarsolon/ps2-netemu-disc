@@ -120,3 +120,39 @@ The guard `check_cdvd_buffer_guard` in `netemu_p2e/src/probe.c` does NOT rely on
 - If fields are swapped (e.g. `0x2458428` holds `0x500002c00000` and `0x2458438` holds `0x84000000`):
   - `raw_lpar >= 0x100000000ULL` immediately triggers guard refusal.
   - Aborts with zero hypercalls.
+
+---
+
+## 4. Build & Audit Results
+
+### Build Artifacts
+All 4 variants built cleanly via `python netemu_p2e/build.py`:
+
+| Variant | ELF SHA-256 | SELF SHA-256 | Code Size |
+|---|---|---|---|
+| **K0** | `0e096b409f53a4e4b9620e003d97f312a6f09a57015a881fa80d7a9457737e9c` | `a0c7f767c5b481ce70bd31aa24a69f8efd1c06299d1f130c7f4c312ebc854f13` | 8,832 bytes |
+| **K1** | `5bfd21d4a63b6d55d3b4c9220af3a241e9d91056d95710dd52194e41f848b8e5` | `ade93a38f67822ffe5f8f767de9d86c59165763df7a9ebc330c568d92e69eabf` | 9,432 bytes |
+| **K2** | `e13e9bc205d56c4de096948a8d58c7f4f21f1be79395532beb19962474403246` | `3711a6d995a7d48ce2273956a27c6a7df6f45a2078f413221d83c1ce7c552d35` | 10,808 bytes |
+| **K3** | `e1dbd01afa801cb16f7d384ee96f8f152b194463ef16e8f74b166f58234d3ae0` | `380b0d4162c24be6538ee012f1c16a91d35ee2434d5fee07b159aceb336d607c` | 12,112 bytes |
+
+### Security & Integrity Audits
+1. **LLVM IR Pointer Provenance Audit (`netemu_p2e/audit_ir.py`)**:
+   - `inttoptr` casts inspected across all 4 variants.
+   - All pointer targets strictly verified to match authorized ranges (mailbox `0x930F20..0x930F80`, stock struct `0x2458428..0x2458438`, arena `0x2458480..0x2459480`).
+   - PASS for K0, K1, K2, K3.
+2. **`tools/p1a_audit.py` Single `sc` Instruction Check**:
+   - Exactly ONE `sc` instruction in `.text` at `0x4858` for all variants.
+   - Zero illegal `sc` instructions or accidental byte patterns in `.rodata` (avoided `"GUARD"` string hazard by using `" SANITY REJECT (0 HC)"`).
+3. **SELF Round-Trip Decryption**:
+   - Each SELF decrypted with `make_fself.exe -d` matches its corresponding patched ELF byte-for-byte.
+
+### PC Validation Harness (`netemu_p2e/validate_pc.py`)
+Tested in PyGhidra emulator with console ground-truth addresses:
+- **K0**: PASS (130 hypercalls: open, allocate DMA, free DMA, close).
+- **K1**: PASS (131 hypercalls: open, allocate DMA, map DMA LPAR `0x84000000`, unmap DMA, free DMA, close).
+- **K2**: PASS (131 hypercalls: open, allocate DMA, map DMA, write ATAPI INQUIRY to CPU EA `0x500002c00000` with buffer LPAR `0x84001000`, send cmd LPAR `0x84000000`, unmap DMA, free DMA, close).
+- **K3**: PASS (132 hypercalls: open, allocate DMA, map DMA, INQUIRY, READ10 to CPU EA `0x500002c00000` with buffer LPAR `0x84001000`, send cmd LPAR `0x84000000`, unmap DMA, free DMA, close).
+- **Negative Test (Swapped Fields)**: PASS. Rejection triggered at Step 10 (`step_failed = 10`), **0 hypercalls issued**, raw values recorded to arena.
+- **Unmapped Memory Store Audit**: PASS. Zero writes to unmapped LPAR `0x84000000..0x84002000` or unauthorized RAM. All stores directed to stack, mailbox, arena, or CPU EA `0x500002c00000`.
+- **Installer Script Parse Check**: PASS (`tools/install_netemu.ps1` and `tools/restore_netemu.ps1` syntax checked without execution).
+
