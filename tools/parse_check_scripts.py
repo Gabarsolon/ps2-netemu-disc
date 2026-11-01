@@ -3,8 +3,10 @@ import subprocess, sys
 ps_code = '''
 $p1 = 'C:\\Users\\remus\\ps2-netemu-disc\\tools\\make_log_placeholder.ps1'
 $p2 = 'C:\\Users\\remus\\ps2-netemu-disc\\tools\\read_netemu_log.ps1'
+$p3 = 'C:\\Users\\remus\\ps2-netemu-disc\\tools\\install_netemu.ps1'
+$p4 = 'C:\\Users\\remus\\ps2-netemu-disc\\tools\\restore_netemu.ps1'
 
-foreach ($p in @($p1, $p2)) {
+foreach ($p in @($p1, $p2, $p3, $p4)) {
     $tokens = $null
     $errors = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($p, [ref]$tokens, [ref]$errors)

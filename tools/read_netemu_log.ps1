@@ -99,6 +99,7 @@ try {
     $nextIdx  = Get-U32BE $bytes 28
     $bootTb   = Get-U64BE $bytes 32
     $clean    = Get-U32BE $bytes 40
+    $recCount = Get-U32BE $bytes 44
 
     Write-Host "Version:      0x$($version.ToString('X8'))"
     Write-Host "Header Size:  $hdrSize bytes"
@@ -109,6 +110,7 @@ try {
     Write-Host "Boot TB:      0x$($bootTb.ToString('X16')) ($bootTb ticks)"
     $shutdownStatus = if ($clean -eq 1) { 'CLEAN' } else { 'UNCOMMITTED / CRASH' }
     Write-Host "Shutdown:     $shutdownStatus"
+    Write-Host "Record Count: $recCount"
   } else {
     Write-Warning "Header magic does not match 'NETEMULG' (found '$hdrMagic')."
   }
@@ -130,12 +132,22 @@ try {
 
     $recMagic = Get-Ascii $bytes $off 4
     if ($recMagic -eq 'LOGR') {
-      $seq = Get-U32BE $bytes ($off + 4)
-      $tag = Get-U32BE $bytes ($off + 8)
-      $tb  = Get-U64BE $bytes ($off + 12)
-      $text = Get-Ascii $bytes ($off + 20) (512 - 20)
+      $seq   = Get-U32BE $bytes ($off + 4)
+      $tag   = Get-U32BE $bytes ($off + 8)
+      $flags = Get-U32BE $bytes ($off + 12)
+      $tb    = Get-U64BE $bytes ($off + 16)
+      $valA  = Get-U64BE $bytes ($off + 24)
+      $valB  = Get-U64BE $bytes ($off + 32)
+      $text  = Get-Ascii $bytes ($off + 72) (512 - 72)
 
-      Write-Host ("[Sector {0:D3}] Seq={1:D4} Tag=0x{2:X4} TB=0x{3:X16} -> {4}" -f $s, $seq, $tag, $tb, $text)
+      $tagBytes = @($bytes[$off + 8], $bytes[$off + 9], $bytes[$off + 10], $bytes[$off + 11])
+      $isTagAscii = $true
+      foreach ($tByte in $tagBytes) {
+        if ($tByte -lt 32 -or $tByte -gt 126) { $isTagAscii = $false; break }
+      }
+      $tagStr = if ($isTagAscii) { "'" + [System.Text.Encoding]::ASCII.GetString($tagBytes) + "'" } else { "0x" + $tag.ToString('X8') }
+
+      Write-Host ("[Sector {0:D3}] Seq={1:D4} Tag={2} TB=0x{3:X16} A=0x{4:X16} B=0x{5:X16} -> {6}" -f $s, $seq, $tagStr, $tb, $valA, $valB, $text)
       $recordFound++
     } else {
       # Unstructured sector dump
