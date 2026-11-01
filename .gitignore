@@ -90,3 +90,7 @@ netemu_p6/settings/
 netemu_p6/tmp/
 netemu_p6/build/
 netemu_p6/evidence/*patch_table*.json
+netemu_p7/settings/
+netemu_p7/tmp/
+netemu_p7/build/
+netemu_p7/evidence/*patch_table*.json
