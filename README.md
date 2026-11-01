@@ -9,21 +9,21 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 <!-- progress:start -->
 ## Progress
 
-![Project progress 34%](docs/progress.svg)
+![Project progress 36%](docs/progress.svg)
 
-**Overall: about 34%** (effort-weighted estimate; the real risk is not evenly spread).
+**Overall: about 36%** (effort-weighted estimate; the real risk is not evenly spread).
 
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
 | Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 95% |
 | Level 1: read sector 16 (ISO9660 signature) | 10% | `████░░░░░░` 35% |
-| Disc authentication (likely required for any data read) | 15% | `█░░░░░░░░░` 10.0% |
+| Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 20.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-01. P10 (agy): static analysis says the drive withholds media data until a SEND KEY handshake; softemu does it via the secure service over VUART port 10; PS2_NE_LPAR profile clears the ability bit that probably binds port 10. V1 build (query-only, no auth request) is ready to test._
+_Last update: 2026-11-01. P10 V1 on console: VUART port 10 answers for the netemu partition (rc 0 for param queries and zero-length read/write; no -6). READ(10) still returns no data. Next: send the real disc-auth request (needs owner go-ahead)._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
