@@ -1,0 +1,50 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0     4b00     1 . = 0x4B00
+            4b00             4b00     2b98     4 .text
+            4b00             4b00     2b98     4         build/probe_p10_V1.o:(.text)
+            4b00             4b00      1f0     1                 hddlog_init
+            4cf0             4cf0       78     1                 is_hdd_log_safe
+            4d68             4d68      2b4     1                 hddlog_write
+            501c             501c     18e4     1                 s4_menu
+            6900             6900       58     1                 get_arena
+            6958             6958       7c     1                 arena_rw
+            69d4             69d4       30     1                 append_str
+            6a04             6a04       a0     1                 format_dec
+            6aa4             6aa4       50     1                 format_hex64
+            6af4             6af4       6c     1                 setup_atapi_block
+            6b60             6b60      154     1                 poll_completion
+            6cb4             6cb4       2c     1                 prefill_buffer
+            6ce0             6ce0       4c     1                 format_ascii
+            6d2c             6d2c       50     1                 format_hex32
+            6d7c             6d7c       40     1                 format_s32
+            6dbc             6dbc      5d0     1                 execute_read_test
+            738c             738c       6c     1                 format_bytes_hex
+            73f8             73f8      2a0     1                 do_request_sense
+            7698             7698      659     1 .rodata
+            7698             7698      659     1         build/probe_p10_V1.o:(.rodata)
+            79ca             79ca       14     1                 hddlog_init.path
+            79de             79de       14     1                 hddlog_write.path
+            7cf8             7cf8        8     8 .got
+            7cf8             7cf8        8     8         <internal>:(.got)
+            7d00             7d00        8     8 .toc
+            7d00             7d00        8     8         build/probe_p10_V1.o:(.toc)
+            7d08             7d08        0     1 repo_read = 0x48c0
+            7d08             7d08        0     1 native_clock = 0x4900
+            7d08             7d08        0     1 native_alloc = 0x4920
+            7d08             7d08        0     1 stock_ufs_open = 0x4960
+            7d08             7d08        0     1 stock_ufs_close = 0x49a0
+            7d08             7d08        0     1 stock_raw_read = 0x49e0
+            7d08             7d08        0     1 stock_raw_write = 0x4a20
+            7d08             7d08        0     1 stock_hdd_cache_flush = 0x4a60
+            7d08             7d08        0     1 get_r2 = 0x4aa0
+            7d08             7d08        0     1 lv1_hcall = 0x4800
+            7d08             7d08        0     8 .branch_lt
+            7d08             7d08        0     8         <internal>:(.branch_lt)
+               0                0       c9     1 .comment
+               0                0       c9     1         <internal>:(.comment)
+               0                0      318     8 .symtab
+               0                0      318     8         <internal>:(.symtab)
+               0                0       47     1 .shstrtab
+               0                0       47     1         <internal>:(.shstrtab)
+               0                0      1ac     1 .strtab
+               0                0      1ac     1         <internal>:(.strtab)
