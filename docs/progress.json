@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-01",
-  "note": "P11 (agy): independent re-derivation corrected the P10 request layout (32-bit fields, LAID at +0x30, disc-type byte 0x13 for DVD-5). W1 build ready: sends the real disc-auth request once, bounded polling, keys scrubbed. Needs a console test.",
+  "note": "P11b: status 0x16 decoded = 'HW: not ps2 disc' (drive reports generic DVD profile, not the PS2 profile 0xFF60/61); W1 log went silent because the HDD log writer skipped records while netemu streamed. W2 build adds GET CONFIGURATION / READ DISC STRUCTURE before the auth and a retrying log writer. Needs a console test.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",

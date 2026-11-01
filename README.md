@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-01. P11 (agy): independent re-derivation corrected the P10 request layout (32-bit fields, LAID at +0x30, disc-type byte 0x13 for DVD-5). W1 build ready: sends the real disc-auth request once, bounded polling, keys scrubbed. Needs a console test._
+_Last update: 2026-11-01. P11b: status 0x16 decoded = 'HW: not ps2 disc' (drive reports generic DVD profile, not the PS2 profile 0xFF60/61); W1 log went silent because the HDD log writer skipped records while netemu streamed. W2 build adds GET CONFIGURATION / READ DISC STRUCTURE before the auth and a retrying log writer. Needs a console test._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
