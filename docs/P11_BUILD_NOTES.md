@@ -639,3 +639,32 @@ Decompilation of LPAR creation and partition setup in `sysmgr_ss.elf` (`_opd_FUN
 - **Modification**: Hook `_opd_FUN_8001e308` in Cobra payload to retain ability bit `0x2000000` and partition type 2.
 - **Feasibility & Safety**:
   - Moderate complexity: `ps2_netemu` binary may depend on memory partition boundaries specific to `PS2_NE_LPAR` (32 MiB vs 256 MiB).
+
+---
+
+## Part 5: Task P12 Hypervisor Routes & Cobra Architecture Findings
+
+### 1. Cobra Secure-Service Patch Architecture [PROVEN]
+- **Public Reference**: `Cobra-7.00/446/stage2/storage_ext.c` (`patch_ps2emu_entry`), lines 3374–3411; `aldostools/Mamba` `stage2/storage_ext.c`, lines 3867–3903.
+- **Timing**: Runs once at boot during LV2 kernel init via `main()` -> `storage_ext_patches()`. Does not run per PS2 launch.
+- **Primitives**: Direct memory access via `HV_BASE` (`0x8000000014000000ULL`) or hypercalls 182 (`lv1_cfw_peek`) / 183 (`lv1_cfw_poke`).
+- **Memory Range & Target**: Scans LV1 physical memory `0x100000..0x300000` (1 MiB to 3 MiB) for signature `0x409E00702FBE0001` (and `0x38800002409C0014`). Patches the **loaded process pages** of `ss_server3` in hypervisor dynamic RAM, NOT the embedded filesystem image (which is zeroed/freed after boot).
+- **Netemu Exclusion**: Cobra explicitly skipped `ps2_netemu` with `if (ps2emu_type == PS2EMU_SW) return;` because retail netemu lacked optical disc support.
+
+### 2. Process Lifetime & Timeline Verdict [PROVEN]
+- `ss_server1` is launched at cold boot by `ss_init` and remains permanently resident as an LV1 daemon listening on VUART Port 10 (ring buffer 4096 bytes).
+- In P10/P11 logs, VUART query on port 10 succeeded at `t = 0.00s` immediately at netemu boot.
+- Netemu's `0x5005` auth request is sent at `t = ~0.20s` after boot.
+- **Verdict**: `ss_server1` outlives guest partitions; any in-memory patch applied at boot or prior to netemu launch persists across the partition switch. There is no race condition.
+
+### 3. Ranked Hypervisor Routes Summary
+1. **Rank 1 (Recommended)**: In-memory dynamic patch of `ss_server1` at VA `0x80020710` (ELF file offset `0x30710`). Replace conditional branch `ble cr7, 0x8002072c` (`0x409D001C`) with unconditional branch `b 0x8002072c` (`0x4800001C`). Pattern: `812100703D29FFFF392900A02B890001` (patch at `+0x10`). Zero brick risk; works on CFW & HEN.
+2. **Rank 2**: In-memory patch of `sysmgr_ss` at VA `0x8001e334` (`_opd_FUN_8001e308`). Replace `and r0, r0, r9` (`0x7C004838`, which strips ability `0x02000000`) with `nop` (`0x60000000`).
+3. **Rank 3**: Persistent patch of `lv1.self` on flash CoreOS. Extremely high brick risk; impossible on HEN (`metldr2` ECDSA brick).
+4. **Rank 4**: Drive-side ATA vendor command. Low feasibility, undocumented, drive controller hang risk.
+
+### 4. Drive Gate UNKNOWN & Minimal First Experiment
+- Decompilation of `ss_server1` (`_opd_FUN_80020638`) proves that once the profile check at `0x80020710` passes, the session key derivation function `_opd_FUN_8003220c` is called **without passing the profile word**. The profile check is an artificial software gate in `ss_server1`.
+- **Minimal First Experiment**: Read-only RAM scan of `0x100000..0x300000` via webMAN MOD / PS3MAPI for `812100703D29FFFF392900A02B890001` to locate the live physical address on the console, followed by an in-memory 4-byte poke of `0x4800001C` and running `ps2_netemu_p11_W2.self` to observe whether `0x5005` succeeds and `READ(10)` unlocks data.
+- Full details in `docs/P12_HYPERVISOR_ROUTES.md`.
+

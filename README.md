@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-01. P11b/P11c: W2 shows the drive profile stays generic DVD (0x0010) inside the netemu partition; the secure service requires the PS2 profile (0xFF60/61) and rejects with 0x16. Static analysis: guest ATAPI cannot change it; the candidate fix is on the hypervisor side (a patch to the secure service check or to how the PS2 partition is created), not in netemu._
+_Last update: 2026-11-01. P12 (agy, orchestrator-checked against Cobra source): the loaded secure-service pages live in LV1 0x100000..0x300000 (Cobra scans exactly that range); candidate fix is a 4-byte live patch of the ss_server1 profile check. Next: a read-only scan to locate it; the patch itself is a hypervisor write that needs the owner's decision._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
