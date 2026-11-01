@@ -78,3 +78,7 @@ netemu_p2e/settings/
 netemu_p2e/tmp/
 netemu_p2e/build/
 netemu_p2e/evidence/*patch_table*.json
+netemu_p4/settings/
+netemu_p4/tmp/
+netemu_p4/build/
+netemu_p4/evidence/*patch_table*.json

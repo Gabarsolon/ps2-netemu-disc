@@ -72,6 +72,9 @@ def decode_log(data: bytes, verbose: bool = True):
     if verbose:
         print("\n=== LOG RECORDS ===")
 
+    records = []
+    header_boot_tb = result['header']['boot_tb'] if result['header'] else 0
+
     for s in range(1, total_sectors):
         off = s * 512
         sec = data[off : off + 512]
@@ -80,13 +83,15 @@ def decode_log(data: bytes, verbose: bool = True):
 
         rec_magic = sec[:4]
         if rec_magic == b'LOGR':
-            seq, tag, flags, tb, a, b = struct.unpack_from('>IIIQQQ', sec, 4)
+            seq, tag, flags, tb, a, b, boot_id = struct.unpack_from('>IIIQQQQ', sec, 4)
             # Text starts at offset 72 (0x48), max 440 bytes
             raw_text = sec[72:512]
             null_pos = raw_text.find(b'\x00')
             if null_pos != -1:
                 raw_text = raw_text[:null_pos]
             text = raw_text.decode('latin-1', errors='replace')
+
+            is_current = (boot_id == header_boot_tb) if header_boot_tb != 0 else True
 
             rec_dict = {
                 'sector': s,
@@ -97,19 +102,80 @@ def decode_log(data: bytes, verbose: bool = True):
                 'tb': tb,
                 'a': a,
                 'b': b,
-                'text': text
+                'boot_id': boot_id,
+                'is_current': is_current,
+                'text': text,
+                'crash_point': False
             }
-            result['records'].append(rec_dict)
-            if verbose:
-                tag_display = tag_to_str(tag)
-                print(f"[Sector {s:03d}] Seq={seq:04d} Tag={tag_display} TB=0x{tb:016X} A=0x{a:016X} B=0x{b:016X} -> {text}")
+            records.append(rec_dict)
         else:
-            if verbose:
-                sample = sec[:16].hex()
-                print(f"[Sector {s:03d}] Raw (magic {rec_magic!r}): {sample}...")
+            records.append({
+                'sector': s,
+                'raw_magic': rec_magic,
+                'raw_hex': sec[:32].hex()
+            })
 
+    # Analyze WAL sequences for [CRASH POINT] detection
+    # In WAL, each PRE record should be followed by a POST (or TIMEOUT/END)
+    TAG_PRE  = 0x50524520  # 'PRE '
+    TAG_POST = 0x504F5354  # 'POST'
+    TAG_TMO  = 0x544D4F20  # 'TMO '
+    TAG_END  = 0x454E4420  # 'END '
+
+    current_records = [r for r in records if r.get('is_current', True) and 'tag' in r]
+    pending_pre = None
+
+    for r in current_records:
+        tag = r['tag']
+        if tag == TAG_PRE:
+            if pending_pre is not None:
+                # Previous PRE was never resolved!
+                pending_pre['crash_point'] = True
+            pending_pre = r
+        elif tag == TAG_POST:
+            if pending_pre is not None:
+                pending_pre = None
+        elif tag in (TAG_TMO, TAG_END):
+            pending_pre = None
+
+    if pending_pre is not None:
+        pending_pre['crash_point'] = True
+
+    result['records'] = records
+
+    crash_found = None
     if verbose:
-        print(f"\nTotal populated log records found: {len(result['records'])}")
+        for r in records:
+            s = r['sector']
+            if 'tag' in r:
+                tag_display = r['tag_str']
+                seq = r['seq']
+                tb = r['tb']
+                a = r['a']
+                b = r['b']
+                boot_id = r['boot_id']
+                text = r['text']
+                status_notes = []
+                if not r['is_current']:
+                    status_notes.append(f"[STALE boot_id=0x{boot_id:016X}]")
+                if r['crash_point']:
+                    status_notes.append("[CRASH POINT]")
+                    crash_found = r
+
+                note_str = (" " + " ".join(status_notes)) if status_notes else ""
+                print(f"[Sector {s:03d}] Seq={seq:04d} Tag={tag_display} BootID=0x{boot_id:016X} TB=0x{tb:016X} A=0x{a:016X} B=0x{b:016X} -> {text}{note_str}")
+            else:
+                print(f"[Sector {s:03d}] Raw (magic {r['raw_magic']!r}): {r['raw_hex']}...")
+
+        print(f"\nTotal populated log records found: {len(records)}")
+        if crash_found:
+            print(f"\n*** [CRASH POINT DETECTED] ***")
+            print(f"Execution did not return from call logged at Sector {crash_found['sector']} (Seq={crash_found['seq']}):")
+            print(f"  Command / Step : {crash_found['text']}")
+            print(f"  Timestamp (TB) : 0x{crash_found['tb']:016X}")
+            print(f"  Parameters     : A=0x{crash_found['a']:016X}, B=0x{crash_found['b']:016X}")
+        elif any(r.get('tag') == TAG_END for r in current_records):
+            print("\n*** Log execution completed normally (TAG_END found) ***")
 
     return result
 

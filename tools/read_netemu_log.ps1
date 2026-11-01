@@ -117,7 +117,7 @@ try {
 
   # Parse records (Sector 1 onwards, each 512 bytes)
   $sectorCount = [int]($len / 512)
-  $recordFound = 0
+  $records = New-Object System.Collections.Generic.List[Object]
   Write-Host ""
   Write-Host "--- LOG RECORDS ---"
 
@@ -132,13 +132,14 @@ try {
 
     $recMagic = Get-Ascii $bytes $off 4
     if ($recMagic -eq 'LOGR') {
-      $seq   = Get-U32BE $bytes ($off + 4)
-      $tag   = Get-U32BE $bytes ($off + 8)
-      $flags = Get-U32BE $bytes ($off + 12)
-      $tb    = Get-U64BE $bytes ($off + 16)
-      $valA  = Get-U64BE $bytes ($off + 24)
-      $valB  = Get-U64BE $bytes ($off + 32)
-      $text  = Get-Ascii $bytes ($off + 72) (512 - 72)
+      $seq    = Get-U32BE $bytes ($off + 4)
+      $tag    = Get-U32BE $bytes ($off + 8)
+      $flags  = Get-U32BE $bytes ($off + 12)
+      $tb     = Get-U64BE $bytes ($off + 16)
+      $valA   = Get-U64BE $bytes ($off + 24)
+      $valB   = Get-U64BE $bytes ($off + 32)
+      $bootId = Get-U64BE $bytes ($off + 40)
+      $text   = Get-Ascii $bytes ($off + 72) (512 - 72)
 
       $tagBytes = @($bytes[$off + 8], $bytes[$off + 9], $bytes[$off + 10], $bytes[$off + 11])
       $isTagAscii = $true
@@ -147,18 +148,88 @@ try {
       }
       $tagStr = if ($isTagAscii) { "'" + [System.Text.Encoding]::ASCII.GetString($tagBytes) + "'" } else { "0x" + $tag.ToString('X8') }
 
-      Write-Host ("[Sector {0:D3}] Seq={1:D4} Tag={2} TB=0x{3:X16} A=0x{4:X16} B=0x{5:X16} -> {6}" -f $s, $seq, $tagStr, $tb, $valA, $valB, $text)
-      $recordFound++
+      $isCurrent = if ($bootTb -ne 0) { ($bootId -eq $bootTb) } else { $true }
+
+      $rec = [PSCustomObject]@{
+        Sector     = $s
+        Seq        = $seq
+        Tag        = $tag
+        TagStr     = $tagStr
+        Flags      = $flags
+        TB         = $tb
+        ValA       = $valA
+        ValB       = $valB
+        BootId     = $bootId
+        IsCurrent  = $isCurrent
+        Text       = $text
+        CrashPoint = $false
+      }
+      $records.Add($rec)
     } else {
       # Unstructured sector dump
       $sample = [System.BitConverter]::ToString($bytes, $off, 32).Replace('-', ' ')
-      Write-Host ("[Sector {0:D3}] Raw (Magic '{1}'): {2} ..." -f $s, $recMagic, $sample)
-      $recordFound++
+      $rec = [PSCustomObject]@{
+        Sector    = $s
+        RawMagic  = $recMagic
+        RawHex    = $sample
+      }
+      $records.Add($rec)
+    }
+  }
+
+  # Crash point analysis on WAL records
+  $TAG_PRE  = 0x50524520  # 'PRE '
+  $TAG_POST = 0x504F5354  # 'POST'
+  $TAG_TMO  = 0x544D4F20  # 'TMO '
+  $TAG_END  = 0x454E4420  # 'END '
+
+  $pendingPre = $null
+  foreach ($r in $records) {
+    if ($null -ne $r.Tag -and $r.IsCurrent) {
+      if ($r.Tag -eq $TAG_PRE) {
+        if ($null -ne $pendingPre) {
+          $pendingPre.CrashPoint = $true
+        }
+        $pendingPre = $r
+      } elseif ($r.Tag -eq $TAG_POST) {
+        $pendingPre = $null
+      } elseif ($r.Tag -eq $TAG_TMO -or $r.Tag -eq $TAG_END) {
+        $pendingPre = $null
+      }
+    }
+  }
+  if ($null -ne $pendingPre) {
+    $pendingPre.CrashPoint = $true
+  }
+
+  $crashFound = $null
+  foreach ($r in $records) {
+    if ($null -ne $r.Tag) {
+      $notes = New-Object System.Collections.Generic.List[string]
+      if (-not $r.IsCurrent) {
+        $notes.Add(("[STALE boot_id=0x{0:X16}]" -f $r.BootId))
+      }
+      if ($r.CrashPoint) {
+        $notes.Add("[CRASH POINT]")
+        $crashFound = $r
+      }
+      $noteStr = if ($notes.Count -gt 0) { " " + ($notes -join " ") } else { "" }
+      Write-Host ("[Sector {0:D3}] Seq={1:D4} Tag={2} BootID=0x{3:X16} TB=0x{4:X16} A=0x{5:X16} B=0x{6:X16} -> {7}{8}" -f $r.Sector, $r.Seq, $r.TagStr, $r.BootId, $r.TB, $r.ValA, $r.ValB, $r.Text, $noteStr)
+    } else {
+      Write-Host ("[Sector {0:D3}] Raw (Magic '{1}'): {2} ..." -f $r.Sector, $r.RawMagic, $r.RawHex)
     }
   }
 
   Write-Host ""
-  Write-Host "Total populated log records found: $recordFound"
+  Write-Host "Total populated log records found: $($records.Count)"
+  if ($null -ne $crashFound) {
+    Write-Host ""
+    Write-Host "*** [CRASH POINT DETECTED] ***" -ForegroundColor Red
+    Write-Host ("Execution halted during call logged at Sector {0} (Seq={1}):" -f $crashFound.Sector, $crashFound.Seq)
+    Write-Host ("  Command / Step : {0}" -f $crashFound.Text)
+    Write-Host ("  Timestamp (TB) : 0x{0:X16}" -f $crashFound.TB)
+    Write-Host ("  Parameters     : A=0x{0:X16}, B=0x{1:X16}" -f $crashFound.ValA, $crashFound.ValB)
+  }
 }
 finally {
   if (Test-Path -LiteralPath $tempDownload) { Remove-Item -LiteralPath $tempDownload -Force }
