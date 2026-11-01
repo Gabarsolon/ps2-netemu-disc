@@ -1,0 +1,13 @@
+{
+  "updated": "2026-11-01",
+  "note": "Drive access proven from the netemu partition (open, DMA map, ATAPI INQUIRY/READ CAPACITY with the real disc size). Sector data does not arrive yet (DMA path); PS3 control disc behaves the same, so it is not PS2 copy protection.",
+  "stages": [
+    {"name": "Patch / install / test pipeline and durable HDD log", "weight": 10, "done": 100},
+    {"name": "Netemu partition talks to the drive (open, DMA map, ATAPI commands)", "weight": 20, "done": 95},
+    {"name": "Level 1: read sector 16 (ISO9660 signature)", "weight": 10, "done": 35},
+    {"name": "PS2 media authentication, if needed", "weight": 15, "done": 0},
+    {"name": "Level 2: emulator disc layer reads from the drive (boot)", "weight": 25, "done": 0},
+    {"name": "Level 3: playable (read-ahead, CD/DVD, dual layer)", "weight": 10, "done": 0},
+    {"name": "Level 4: usable (app, stub ISO, configs, no-disc messages)", "weight": 10, "done": 0}
+  ]
+}

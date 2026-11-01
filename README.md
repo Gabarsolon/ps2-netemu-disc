@@ -2,9 +2,31 @@
 
 Goal: play a PS2 disc straight from the PS3 slim's disc drive through the CFW `ps2_netemu.self`, with no copy to the HDD.
 
-**Status: research and planning. Nothing is built.** It is not known yet whether the slim's drive can read PS2 media or whether the emulator's partition may talk to the drive. See `docs/OPEN_QUESTIONS.md`.
+**Status: research and diagnostic builds on the real console.** The patched netemu can already open the optical drive, map DMA and run ATAPI commands (it reads the real disc size) from inside the PS2 partition. It cannot read sector data yet. Nothing playable exists. Every result is written up in `docs/` (labels PROVEN / INFERRED / CLAIMED / UNKNOWN).
 
 Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) project learned about patching `ps2_netemu.self`.
+
+<!-- progress:start -->
+## Progress
+
+![Project progress 32%](docs/progress.svg)
+
+**Overall: about 32%** (effort-weighted estimate; the real risk is not evenly spread).
+
+| Stage | Weight | Done |
+|---|---:|---|
+| Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
+| Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 95% |
+| Level 1: read sector 16 (ISO9660 signature) | 10% | `████░░░░░░` 35% |
+| PS2 media authentication, if needed | 15% | `░░░░░░░░░░` 0% |
+| Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
+| Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
+| Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
+
+_Last update: 2026-11-01. Drive access proven from the netemu partition (open, DMA map, ATAPI INQUIRY/READ CAPACITY with the real disc size). Sector data does not arrive yet (DMA path); PS3 control disc behaves the same, so it is not PS2 copy protection._
+<!-- progress:end -->
+
+The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
 
 ## Read in this order
 
