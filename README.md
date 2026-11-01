@@ -18,12 +18,12 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
 | Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 95% |
 | Level 1: read sector 16 (ISO9660 signature) | 10% | `████░░░░░░` 35% |
-| PS2 media authentication, if needed | 15% | `░░░░░░░░░░` 0% |
+| Disc authentication (likely required for any data read) | 15% | `░░░░░░░░░░` 0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-01. Drive access proven from the netemu partition (open, DMA map, ATAPI INQUIRY/READ CAPACITY with the real disc size). Sector data does not arrive yet (DMA path); PS3 control disc behaves the same, so it is not PS2 copy protection._
+_Last update: 2026-11-01. ATAPI reads (PIO and DMA) of sector data return success with no data on both the PS2 DVD and a PS3 control disc: the drive/hypervisor most likely withholds media data until the disc authentication is done (the secure service softemu calls). Next: how to reach that service from the netemu partition._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
