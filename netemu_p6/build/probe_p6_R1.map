@@ -1,0 +1,43 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0     4b00     1 . = 0x4B00
+            4b00             4b00     1680     4 .text
+            4b00             4b00     1680     4         build/probe_p6_R1.o:(.text)
+            4b00             4b00      1f0     1                 hddlog_init
+            4cf0             4cf0       78     1                 is_hdd_log_safe
+            4d68             4d68      2b4     1                 hddlog_write
+            501c             501c      f20     1                 s4_menu
+            5f3c             5f3c       58     1                 get_arena
+            5f94             5f94       7c     1                 arena_rw
+            6010             6010       30     1                 append_str
+            6040             6040       a0     1                 format_dec
+            60e0             60e0       50     1                 format_hex64
+            6130             6130       50     1                 format_hex32
+            6180             6180      3c8     8 .rodata
+            6180             6180      3c8     8         build/probe_p6_R1.o:(.rodata)
+            6312             6312       14     1                 hddlog_init.path
+            6326             6326       14     1                 hddlog_write.path
+            64a0             64a0       a8     1                 candidates
+            6548             6548        8     8 .got
+            6548             6548        8     8         <internal>:(.got)
+            6550             6550        8     8 .toc
+            6550             6550        8     8         build/probe_p6_R1.o:(.toc)
+            6558             6558        0     1 repo_read = 0x48c0
+            6558             6558        0     1 native_clock = 0x4900
+            6558             6558        0     1 native_alloc = 0x4920
+            6558             6558        0     1 stock_ufs_open = 0x4960
+            6558             6558        0     1 stock_ufs_close = 0x49a0
+            6558             6558        0     1 stock_raw_read = 0x49e0
+            6558             6558        0     1 stock_raw_write = 0x4a20
+            6558             6558        0     1 stock_hdd_cache_flush = 0x4a60
+            6558             6558        0     1 get_r2 = 0x4aa0
+            6558             6558        0     1 lv1_hcall = 0x4800
+            6558             6558        0     8 .branch_lt
+            6558             6558        0     8         <internal>:(.branch_lt)
+               0                0       c9     1 .comment
+               0                0       c9     1         <internal>:(.comment)
+               0                0      270     8 .symtab
+               0                0      270     8         <internal>:(.symtab)
+               0                0       47     1 .shstrtab
+               0                0       47     1         <internal>:(.shstrtab)
+               0                0      13a     1 .strtab
+               0                0      13a     1         <internal>:(.strtab)

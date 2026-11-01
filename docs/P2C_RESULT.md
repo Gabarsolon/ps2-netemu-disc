@@ -24,3 +24,8 @@ Build `local_only/p2c/ps2_netemu_p2c.self` (sha256 `32a346ba...a07b`): no hyperc
 - **PROVEN:** the HDD driver state is live and idle: bus 4, dev 3, BUF_EA 0x500002d00000 maps LPAR 0x84800000, HDD DMA region id 0xd0000000 (so DMA region ids on the HDD are large; the optical H0 region id was >= 8).
 - **INFERRED:** the native allocator pool (EA 0x80000000.., arena at 0x8003e140) is in a different address range than the page-table-mapped DMA buffers (EA 0x5000...); whether EA 0x8003e140 equals an LPAR address (real-mode/identity) is UNKNOWN.
 - **UNKNOWN:** the safe source of a DMA buffer with a known LPAR address for the optical device.
+
+
+## CORRECTION (2026-11-01, after P6)
+
+The "swapped fields" diagnosis in this document chain was WRONG. The stock code (P0 static reading: H+0x20 = physical/LPAR address, H+0x28 = CPU address) and the guest address map agree with the ORIGINAL P2D assignment: the value `0x0000500002c00000` read at 0x2458438 (SB_CDVD) is the partition-physical (LPAR) address and `0x84000000` read at 0x2458428 is the CPU effective address (the 0x80000000+ window is where the guest maps its pool/heap: pool descriptors 0x80000000, arena EA 0x8003e140). Passing 0x84000000 as the LPAR address, as the P2E/P4/P5 builds did, is what made lv1_map_device_dma_region return -17 (the LV1 map handler validates the LPAR address; see docs/P6_BUILD_NOTES.md). The labels "BUF_EA / LPARBUF" in the P2C diagnostic simply followed the wrong assumption. The P2D K0 labels (`CDVD LPAR: 0x0000500002c00000`, `CDVD EA: 0x0000000084000000`) were right.

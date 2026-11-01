@@ -86,3 +86,7 @@ netemu_p5/settings/
 netemu_p5/tmp/
 netemu_p5/build/
 netemu_p5/evidence/*patch_table*.json
+netemu_p6/settings/
+netemu_p6/tmp/
+netemu_p6/build/
+netemu_p6/evidence/*patch_table*.json
