@@ -98,3 +98,7 @@ netemu_p8/settings/
 netemu_p8/tmp/
 netemu_p8/build/
 netemu_p8/evidence/*patch_table*.json
+netemu_p9/settings/
+netemu_p9/tmp/
+netemu_p9/build/
+netemu_p9/evidence/*patch_table*.json
