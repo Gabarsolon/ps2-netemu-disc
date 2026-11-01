@@ -9,21 +9,21 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 <!-- progress:start -->
 ## Progress
 
-![Project progress 36%](docs/progress.svg)
+![Project progress 35%](docs/progress.svg)
 
-**Overall: about 36%** (effort-weighted estimate; the real risk is not evenly spread).
+**Overall: about 35%** (effort-weighted estimate; the real risk is not evenly spread).
 
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
 | Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 95% |
 | Level 1: read sector 16 (ISO9660 signature) | 10% | `████░░░░░░` 35% |
-| Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 20.0% |
+| Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 15.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-01. P11b: status 0x16 decoded = 'HW: not ps2 disc' (drive reports generic DVD profile, not the PS2 profile 0xFF60/61); W1 log went silent because the HDD log writer skipped records while netemu streamed. W2 build adds GET CONFIGURATION / READ DISC STRUCTURE before the auth and a retrying log writer. Needs a console test._
+_Last update: 2026-11-01. P11b/P11c: W2 shows the drive profile stays generic DVD (0x0010) inside the netemu partition; the secure service requires the PS2 profile (0xFF60/61) and rejects with 0x16. Static analysis: guest ATAPI cannot change it; the candidate fix is on the hypervisor side (a patch to the secure service check or to how the PS2 partition is created), not in netemu._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

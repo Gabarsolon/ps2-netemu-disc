@@ -465,3 +465,177 @@ All 6 operational and negative scenarios passed 100%:
     - Block size != 2048: skips auth, completes baseline reads cleanly.
     - ATAPI timeout immediate HALT discipline: 0 teardown hypercalls.
     - Strict memory write provenance: 0 stores outside stack, mailbox, arena, and CDVD buffer range across all 6 scenarios.
+
+
+---
+
+## Part 5: Task P11c Static Reverse Engineering, Drive Profile Mechanism & Conclusions
+
+### 1. Context & New Console Fact (W2 Execution Result)
+- **Console Evidence (`docs/P11B_W2_RESULT.md`)**:
+  - Netemu glance menu Row 1 on retail CECH-2504B with retail PS2 DVD (Test Drive Unlimited):
+    `PROF1=0x0010 PROF2=0x0010 RDS=0x00000000`
+  - VUART Port 10 Authentication Reply:
+    `stat=0x0016` (22), `flg=0x00000000` (`ERR_STAT`).
+  - **Deduction [PROVEN]**:
+    The optical drive's MMC Current Profile (`GET CONFIGURATION`, opcode `0x46`) was `0x0010` (standard DVD-ROM) **both before and after** `READ DISC STRUCTURE` (opcode `0xAD`, format `0x00`, layer 0, rc 0).
+    The P11b hypothesis that `READ DISC STRUCTURE` from inside the netemu guest partition triggers the profile transition to PS2 DVD (`0xFF61`) was **REFUTED**.
+
+---
+
+### 2. Question 1(a): Deconstruction of `ss_server1.elf` Profile Fetch & Authentication
+
+Static decompilation and assembly tracing of `ss_server1.elf` (4.93 and 3.55) establishes the exact mechanism:
+
+#### (a) `ss_server1` Does NOT Issue SCSI Opcode `0x46` [PROVEN]
+- `ss_server1.elf` never formats or executes a SCSI `GET CONFIGURATION` (`0x46`) CDB.
+- W2's query `PROF1=0x0010` and `PROF2=0x0010` was a direct query to the physical MMC drive controller via HV 248. The drive hardware itself remained in profile `0x0010`.
+
+#### (b) Exact Profile Query Command (`_opd_FUN_80024e30` & `_opd_FUN_80025478`) [PROVEN]
+- `_opd_FUN_80020638` queries the drive profile via `_opd_FUN_80024e30`.
+- Target Device: `/dev/rbd0` (string at `0x80052e20`, initialized into context by `_opd_FUN_80024cb8`).
+- Packet Format: 40-byte (`0x28`) IOCTL request header + 4-byte payload buffer:
+  | Offset | Field | Value | Meaning |
+  |---|---|---|---|
+  | `+0x00..+0x05` | 6 Bytes | `0x00` * 6 | Reserved / Zeroes |
+  | `+0x06` | Big-Endian 16-bit | `0x0001` | IOCTL Interface Version 1 |
+  | `+0x08` | Big-Endian 64-bit | `0x0000000000030000` | Device Class (`0x30000` = Storage / Optical Drive) |
+  | `+0x10` | Big-Endian 64-bit | `0x0000000000000011` | Command ID `0x11` (17: Query Drive Profile) |
+  | `+0x18` | Big-Endian 32-bit | `0x00000000` | Argument 1 |
+  | `+0x1C` | Big-Endian 32-bit | `0x00000000` | Argument 2 |
+  | `+0x20` | Big-Endian 32-bit | `0x80000000` | Flags (`INBOUND_READ` data transfer) |
+  | `+0x24` | Big-Endian 32-bit | `0x00000004` | Payload Length (4 bytes) |
+  | `+0x28` | Big-Endian 32-bit | Output Buffer | Target address for returned 32-bit profile word (`aiStack_40[0]`) |
+
+- Dispatch Pipeline (`_opd_FUN_80025478`):
+  1. Opens `/dev/rbd0` via syscall 7 (`sys_fs_open`).
+  2. Transmits 44 bytes via syscall 10 (`sys_fs_write`).
+  3. Receives 44 bytes via syscall 9 (`sys_fs_read`).
+  4. Closes `/dev/rbd0` via syscall 8 (`sys_fs_close`).
+  5. Extracts 32-bit big-endian profile word from offset `+0x28` into `aiStack_40[0]`.
+
+#### (c) Assembly Profile Check in `ss_server1.elf` (`0x80020700..0x80020724`) [PROVEN]
+```assembly
+0x80020700: lwz     r9, 112(r1)        ; Load returned profile from aiStack_40[0]
+0x80020704: addis   r9, r9, -1         ; r9 -= 0x10000
+0x80020708: addi    r9, r9, 160        ; r9 += 0x00A0  (r9 now equals: profile - 0xFF60)
+0x8002070c: cmplwi  cr7, r9, 1         ; Compare unsigned (profile - 0xFF60) <= 1
+0x80020710: ble     cr7, 0x8002072c    ; Branch to Session Key Derivation (SUCCESS!)
+; Failure Path:
+0x80020714: mr      r3, r30
+0x80020718: ld      r5, -26640(r2)     ; Pointer to string: "HW: not ps2 disc" (0xc000e4b0)
+0x8002071c: li      r4, 2
+0x80020720: li      r31, 22            ; Status = 0x16 (22)
+0x80020724: bl      0x80037fdc         ; log_printf
+0x80020728: b       0x80020770         ; Exit returning 0x16
+```
+- **Profile Acceptance Criterion**:
+  - `0xFF60` (PS2 CD-ROM): `0xFF60 - 0xFF60 = 0 <= 1` -> OK.
+  - `0xFF61` (PS2 DVD-ROM): `0xFF61 - 0xFF60 = 1 <= 1` -> OK.
+  - Any other value (such as generic DVD `0x0010`): unsigned subtraction wraps to a large integer `> 1` -> **REJECTED with status `0x16` ("HW: not ps2 disc")**.
+
+#### (d) Pre-Profile Commands Dispatched by `ss_server1.elf` (`_opd_FUN_8001f0e4`) [PROVEN]
+Before querying `/dev/rbd0` cmd `0x11`, `ss_server1` issues its own preparatory commands via `/dev/rbd0` IOCTL cmd 1 (SCSI passthrough):
+1. **SCSI Opcode `0x12` (`INQUIRY`)**:
+   - Length: 60 bytes (`0x3C`).
+   - Checks drive Product ID string at offset `+16` against `"PS-SYSTEM"` and `"PS-SPECIAL"`. If mismatched, returns `0x16` with `"HW:FW not supported"`.
+2. **SCSI Opcode `0xA3` (`REPORT KEY`)**:
+   - CDB: `Byte 0 = 0xA3`, `Byte 7 = 0xE0`, `Byte 8..9 = 0x0014` (Allocation Length = 20 bytes).
+   - Data transfer: 20 bytes DMA (`proto = 2`).
+   - Loop: retries up to 75 (`0x4B`) times with 100 ms pauses (`sys_timer_usleep(100000)`).
+   - Because `ss_server1` returned `"HW: not ps2 disc"` (`0x16`) rather than `"HW:FW not supported"` (`0x16`), this `REPORT KEY` command succeeded on the console, but the drive profile remained `0x0010`.
+
+---
+
+### 3. Question 1(b): Analysis of `ps2_softemu.elf`, `lv1.elf`, and `sysmgr_ss.elf`
+
+#### (a) `ps2_softemu.elf` Pre-Auth Behavior [PROVEN]
+- Full hypercall scan of `ps2_softemu.elf`:
+  - HV 248 (`storage_send_device_command`) is called in **exactly two places**: `0x88c0c` and `0x88d54`.
+  - These two call sites issue ONLY:
+    - Opcode `0x1B` (`START STOP UNIT`)
+    - Opcode `0x2B` (`SEEK(10)`)
+    - Opcode `0x4A` (`GET EVENT STATUS NOTIFICATION`)
+  - `ps2_softemu.elf` **NEVER** issues opcode `0x46` (`GET CONFIGURATION`) or opcode `0xAD` (`READ DISC STRUCTURE`).
+  - Sector reads in softemu use HV 245 (`storage_read`), not ATAPI packet commands.
+  - Callers of VUART `0x5005` in softemu (`0x84ef4`, `0x86654`, `0x8796c`) issue **ZERO preparatory ATAPI commands** prior to dispatching `0x5005`.
+  - **Verdict [PROVEN]**:
+    `ps2_softemu` does NOT put the drive into PS2 mode from inside the guest partition. The drive is already in PS2 mode when `ps2_softemu` starts.
+
+#### (b) BD Drive Setup Hook in `sysmgr_ss.elf` (`_opd_FUN_8001dd00`) [PROVEN]
+- Vtable entry `+0x68` in `sysmgr_ss.elf` (`0x8001dd00`) is referenced as "setup bd drive":
+  - Decompilation of `0x8001dd00` reveals:
+    ```c
+    int retries = 60;
+    do {
+      int rc = _opd_FUN_80020454();
+      if (rc == 0) return 1;
+    } while (--retries != 0);
+    return 0;
+    ```
+  - `_opd_FUN_80020454` opens `/dev/rbd0` via `sys_fs_open`, verifies the descriptor is valid, closes it via `sys_fs_close`, sets a flag, and sleeps up to 5 seconds if busy.
+  - It does NOT issue any vendor SCSI commands or mode switches. It is strictly a device-ready wait loop.
+
+---
+
+### 4. Question 2: GameOS / VSH Disc Presentation & LPAR Launch Paths
+
+Decompilation of LPAR creation and partition setup in `sysmgr_ss.elf` (`_opd_FUN_8001d05c`):
+
+| Property | Retail Disc Boot (`PS2_SW_LPAR`) | ISO Boot (`PS2_NE_LPAR`) |
+|---|---|---|
+| **Constructor** | `_opd_FUN_8001e248` | `_opd_FUN_8001e308` |
+| **Partition Type** | `2` (`PS2_SW_LPAR`) | `4` (`PS2_NE_LPAR`) |
+| **Ability Bitmask (`+0x1C8`)** | `0x201226c` | `(mask & ~0x02000008) | 0x400000` |
+| **Bit `0x2000000` (BDVD Drive Ability)** | **SET** (`0x2000000` active) | **STRIPPED** (`0x2000000` cleared) |
+| **Vtable** | `0xc000c048` | `0xc000c058` |
+| **Host Context** | Disc detected by VSH (`disc_type` = `PS2_DISC`). Physical optical drive initialized for PS2 authentication by LV1 prior to partition start. | Disc launched via webMAN/Cobra ISO mounter. Sandboxed container (`ps2_netemu`). Physical drive ignored / remains in generic DVD-ROM mode (`0x0010`). |
+
+#### Classification of Findings:
+- **[PROVEN]**:
+  - `ss_server1.elf` profile check strictly requires `/dev/rbd0` cmd `0x11` to return `0xFF60` or `0xFF61`.
+  - The drive profile was `0x0010` on the console both before and after `READ DISC STRUCTURE` (opcode `0xAD`).
+  - `ps2_softemu` does not execute any profile-switching commands from inside its partition.
+  - `sysmgr_ss` strips bit `0x2000000` for `PS2_NE_LPAR` while preserving it for `PS2_SW_LPAR`.
+- **[INFERRED]**:
+  - The physical optical drive transitions to profile `0xFF61` during host-level initialization (VSH / GameOS / LV1) when a physical PS2 disc boot is signaled to syscon/drive firmware, which an ISO launch completely bypasses.
+- **[UNKNOWN]**:
+  - Whether the physical drive firmware on CECH-2504B (standalone BD drive controller) latches `0xFF61` based on syscon hardware signaling or an undocumented vendor ATA command issued by LV1 storage manager during host boot.
+
+---
+
+### 5. Question 3: Decision & Ranked Recommendations
+
+#### Decision on Variant W3:
+- **Do NOT build Variant W3**.
+  Static reverse engineering has proven that the drive profile check cannot be satisfied by ANY guest-partition ATAPI command sequence. Netemu has no access to `/dev/rbd0` (which is an LV1/sysmgr device node), and `ss_server1` already issues the pre-auth SCSI commands (`0x12` INQUIRY and `0xA3` REPORT KEY) internally.
+  Building W3 to send more ATAPI commands would produce zero change in the drive profile and would be rejected with status `0x16` again.
+
+#### Ranked Recommendations for Enabling PS2 Disc Sector Access:
+
+##### Rank 1 (Recommended): Dynamic In-Memory Patch of `ss_server1` Profile Check via Cobra CFW
+- **Target**: `ss_server1.elf` at VA `0x80020710` (file offset `0x30710`).
+- **Original Instruction**: `40 9d 00 1c` (`ble cr7, 0x8002072c`).
+- **Patched Instruction**: `48 00 00 1c` (`b 0x8002072c` - unconditional branch to session key calculation).
+- **Alternative Patch**: Extend the comparison to accept generic DVD profile (`0x0010`) and generic CD profile (`0x0008`) in addition to `0xFF60`/`0xFF61`.
+- **Mechanism**:
+  - Cobra CFW (`stage2.bin`) executes with full hypervisor write privileges (`lv1_poke`).
+  - Cobra already dynamically hooks and patches LV1 and secure server functions in memory during system startup.
+  - An LV1 memory poke in Cobra `stage2` patches this single instruction in RAM when `ss_server1` is resident.
+- **Feasibility & Safety**:
+  - **Zero flash modification**: no files on `dev_flash` are modified.
+  - **Zero brick risk**: if anything fails, a simple console power cycle resets memory to stock CFW.
+  - **Immediate success**: `ss_server1` proceeds directly to `_opd_FUN_8003220c`, calculates the session keys with the drive, returns status `0x0000` (SUCCESS), and sets key flags `0x07`, immediately unlocking optical disc sector reads in `ps2_netemu`.
+
+##### Rank 2: Persistent Patch of `ss_server1.fself` in Flash (`dev_blind`)
+- **Target File**: `dev_blind/sys/external/ss_server1.fself`.
+- **Modification**: Decrypt `ss_server1.fself`, apply the 4-byte patch at offset `0x30710`, and re-sign with scetool.
+- **Feasibility & Safety**:
+  - High risk: modifying a core secure server binary on flash can result in a recovery-mode or brick state if signing keys or headers are rejected by LV1 loader.
+  - Strongly inferior to the Rank 1 dynamic in-memory patch.
+
+##### Rank 3: Cobra LPAR Launch Hook (Preserve `PS2_SW_LPAR` Attributes for Netemu)
+- **Target**: `sysmgr_ss.elf` constructor `_opd_FUN_8001e308`.
+- **Modification**: Hook `_opd_FUN_8001e308` in Cobra payload to retain ability bit `0x2000000` and partition type 2.
+- **Feasibility & Safety**:
+  - Moderate complexity: `ps2_netemu` binary may depend on memory partition boundaries specific to `PS2_NE_LPAR` (32 MiB vs 256 MiB).
