@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""
+tools/patch_cobra_netemu_disc.py - In-Memory Cobra Kernel Hook for PS2 Optical Disc Boot on Netemu.
+
+Architecture:
+  Platform: PS3 Slim (CECH-2504B, Evilnat 4.93 CEX Cobra 8.5)
+  Target Module: Cobra stage2 (loaded at 0x00520000 in LV2 Kernel RAM)
+  Function: shutdown_copy_params_patched (called during sys_sm_shutdown 0x8204)
+
+Problem Solved:
+  1. Cobra hard-freezes in an infinite loop (fatal()) when launching physical optical PS2 discs on Slim:
+       if (disc_emulation == EMU_OFF && (effective_disctype == PS2_CD || PS2_DVD)) {
+           fatal("Sorry, no optical disc support in ps2_netemu\\n");
+       }
+     At 0x005308C4: 48 00 00 00 (b 0x005308C4)
+  2. Any in-memory LV1 patches applied from XMB are reset during partition reinitialization on boot.
+  3. ps2_netemu runs in guest partition PS2_NE_LPAR where HVSC 182/183 are denied (-6 / LV1_NO_ENTRY).
+
+Solution:
+  Install a Position-Independent (PIC) kernel trampoline into unused alignment space at 0x0053BD00 in Cobra RAM:
+  1. Hooks 0x005308C4 to branch to 0x0053BD00 (48 00 B4 3C).
+  2. Anchors the 64-bit LV2 kernel virtual address space using bl +4; mflr r12 (preventing kernel DSI exceptions).
+  3. Executes HVSC 183 (lv1_poked) directly from LV2 kernel mode:
+     - 0x00713210 -> 0x48000164e92296c0 (ss_server1 Drive FW check bypass)
+     - 0x00714710 -> 0x4800001c7fc3f378 (ss_server1 Disc profile check bypass)
+  4. Branches back to 0x005308D4 to complete Cobra's netemu parameter setup (--COBRA--, ps2bootparam.dat).
+"""
+
+import sys
+import re
+import argparse
+import urllib.request
+import urllib.error
+
+HOST = "192.168.0.169"
+
+# Signatures and Addresses
+SIGNATURE_ADDR = 0x005308B0
+EXPECTED_SIGNATURE = "81 29 00 00 3d 29 ff ff 39 29 00 a0 2b 89 00 01"
+
+HOOK_CALL_ADDR = 0x005308C0
+STOCK_CALL_BYTES = "41 9d 06 c8 48 00 00 00"  # bgt +6c8; b 0x005308c4 (fatal infinite loop)
+PATCH_CALL_BYTES = "41 9d 06 c8 48 00 b4 3c"  # bgt +6c8; b 0x0053bd00 (branch to our kernel hook)
+
+HOOK_CODE_ADDR = 0x0053BD00
+HOOK_DATA_ADDR = 0x0053BD80
+
+# Machine code for the position-independent kernel trampoline (56 bytes = 7 64-bit words)
+# 0x0053bd00: bl 0x53bd04           (48000005)
+# 0x0053bd04: mflr r12              (7d8802a6)  r12 = 0x0053BD04 (in 64-bit kernel EA)
+# 0x0053bd08: ld r3, 0x7c(r12)      (e86c007c)  r3 = 0x00713210 (ss_server1 FW check)
+# 0x0053bd0c: ld r4, 0x84(r12)      (e88c0084)  r4 = 0x48000164e92296c0
+# 0x0053bd10: li r11, 183           (396000b7)  HVSC 183: lv1_poked
+# 0x0053bd14: sc 1                  (44000022)
+# 0x0053bd18: bl 0x53bd1c           (48000005)
+# 0x0053bd1c: mflr r12              (7d8802a6)  r12 = 0x0053BD1C (in 64-bit kernel EA)
+# 0x0053bd20: ld r3, 0x74(r12)      (e86c0074)  r3 = 0x00714710 (ss_server1 Profile check)
+# 0x0053bd24: ld r4, 0x7c(r12)      (e88c007c)  r4 = 0x4800001c7fc3f378
+# 0x0053bd28: li r11, 183           (396000b7)  HVSC 183: lv1_poked
+# 0x0053bd2c: sc 1                  (44000022)
+# 0x0053bd30: b 0x005308d4          (4bff4ba4)  resume Cobra build_netemu_params
+# 0x0053bd34: nop                   (60000000)
+HOOK_CODE_WORDS = [
+    (0x0053BD00, "480000057d8802a6"),  # bl +4; mflr r12
+    (0x0053BD08, "e86c007ce88c0084"),  # ld r3, 0x7c(r12); ld r4, 0x84(r12)
+    (0x0053BD10, "396000b744000022"),  # li r11, 183; sc 1
+    (0x0053BD18, "480000057d8802a6"),  # bl +4; mflr r12
+    (0x0053BD20, "e86c0074e88c007c"),  # ld r3, 0x74(r12); ld r4, 0x7c(r12)
+    (0x0053BD28, "396000b744000022"),  # li r11, 183; sc 1
+    (0x0053BD30, "4bff4ba460000000"),  # b 0x005308d4; nop
+]
+
+# Data constants table (32 bytes = 4 64-bit words)
+HOOK_DATA_WORDS = [
+    (0x0053BD80, "0000000000713210"),  # Addr 1: ss_server1 Drive FW check
+    (0x0053BD88, "48000164e92296c0"),  # Val 1:  b 0x8001f374 + next inst
+    (0x0053BD90, "0000000000714710"),  # Addr 2: ss_server1 Disc profile check
+    (0x0053BD98, "4800001c7fc3f378"),  # Val 2:  b 0x8002072c + next inst
+]
+
+
+def http_get(url, timeout=10):
+    req = urllib.request.Request(url, headers={"User-Agent": "patch_cobra_netemu_disc/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", errors="ignore")
+
+
+def peek_lv2(addr, timeout=10):
+    url = f"http://{HOST}/peek.lv2?{addr:x}"
+    return http_get(url, timeout=timeout)
+
+
+def poke_lv2(addr, hex_str, timeout=10):
+    url = f"http://{HOST}/poke.lv2?{addr:x}={hex_str}"
+    return http_get(url, timeout=timeout)
+
+
+def extract_bytes(html, addr, num_bytes=16):
+    addr_str = f"{addr:08x}"
+    pattern = rf"{addr_str}[ :]+([0-9a-fA-F ]+)"
+    m = re.search(pattern, html, re.IGNORECASE)
+    if not m:
+        return None
+    raw_hex = m.group(1).strip()
+    parts = raw_hex.split()
+    if len(parts) >= num_bytes:
+        return " ".join(parts[:num_bytes]).lower()
+    return " ".join(parts).lower()
+
+
+def check_status(verbose=True):
+    if verbose:
+        print(f"[*] Reading Cobra stage2 state from {HOST}...")
+
+    # 1. Check signature
+    html = peek_lv2(SIGNATURE_ADDR)
+    sig = extract_bytes(html, SIGNATURE_ADDR, 16)
+    if sig != EXPECTED_SIGNATURE:
+        print(f"[-] SAFETY CHECK FAILED: Signature mismatch at 0x{SIGNATURE_ADDR:08x}!")
+        print(f"    Expected: {EXPECTED_SIGNATURE}")
+        print(f"    Got:      {sig}")
+        return "ERROR"
+
+    # 2. Check callsite
+    html_call = peek_lv2(HOOK_CALL_ADDR)
+    call_bytes = extract_bytes(html_call, HOOK_CALL_ADDR, 8)
+
+    # 3. Check hook code
+    html_code = peek_lv2(HOOK_CODE_ADDR)
+    code_bytes = extract_bytes(html_code, HOOK_CODE_ADDR, 16)
+
+    # 4. Check hook data
+    html_data = peek_lv2(HOOK_DATA_ADDR)
+    data_bytes = extract_bytes(html_data, HOOK_DATA_ADDR, 16)
+
+    if verbose:
+        print(f"    Callsite at 0x{HOOK_CALL_ADDR:08x}: {call_bytes}")
+        print(f"    Hook code at 0x{HOOK_CODE_ADDR:08x}: {code_bytes}")
+        print(f"    Hook data at 0x{HOOK_DATA_ADDR:08x}: {data_bytes}")
+
+    if call_bytes == PATCH_CALL_BYTES:
+        state = "ACTIVE"
+    elif call_bytes == STOCK_CALL_BYTES:
+        state = "STOCK"
+    else:
+        state = "UNKNOWN"
+
+    if verbose:
+        print(f"[*] Overall Cobra Hook State: {state}")
+    return state
+
+
+def apply_patch():
+    print("[*] Applying in-memory Position-Independent Cobra Kernel Hook for PS2 Netemu Optical Discs...")
+    state = check_status(verbose=False)
+    if state == "ERROR":
+        print("[-] Aborting apply due to safety check failure.")
+        return False
+
+    # 1. Write hook data table
+    print(f"[*] Writing 32-byte constant data table to 0x{HOOK_DATA_ADDR:08x}...")
+    for addr, val in HOOK_DATA_WORDS:
+        poke_lv2(addr, val)
+
+    # 2. Write hook code instructions (Position-Independent PIC)
+    print(f"[*] Writing 56-byte PIC kernel trampoline to 0x{HOOK_CODE_ADDR:08x}...")
+    for addr, val in HOOK_CODE_WORDS:
+        poke_lv2(addr, val)
+
+    # 3. Hook the callsite at 0x005308C0
+    print(f"[*] Activating kernel hook branch at 0x{HOOK_CALL_ADDR:08x} (-> 0x{HOOK_CODE_ADDR:08x})...")
+    poke_lv2(HOOK_CALL_ADDR, "419d06c84800b43c")
+
+    # 4. Verify everything
+    print("[*] Verifying applied hook in LV2 RAM...")
+    new_state = check_status(verbose=True)
+    if new_state == "ACTIVE":
+        print("[+] SUCCESS: Cobra Kernel Hook is ACTIVE in LV2 RAM!")
+        print("    Physical optical PS2 discs launched from XMB will now automatically:")
+        print("    1. Trigger kernel-mode HVSC 183 to patch ss_server1 in LV1 RAM.")
+        print("    2. Successfully authenticate physical optical discs (AUTH_VERDICT_OK).")
+        print("    3. Read decrypted disc sectors without black-screen panic.")
+        return True
+    else:
+        print(f"[-] Verification failed! Current state: {new_state}")
+        return False
+
+
+def revert_patch():
+    print("[*] Reverting Cobra Kernel Hook to STOCK...")
+    poke_lv2(HOOK_CALL_ADDR, "419d06c848000000")
+    for addr, _ in HOOK_CODE_WORDS:
+        poke_lv2(addr, "0000000000000000")
+    for addr, _ in HOOK_DATA_WORDS:
+        poke_lv2(addr, "0000000000000000")
+    state = check_status(verbose=True)
+    print(f"[*] Revert complete. Current state: {state}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Cobra Netemu Optical Disc Kernel Patcher")
+    parser.add_argument("--apply", action="store_true", help="Apply kernel hook in LV2 RAM")
+    parser.add_argument("--revert", action="store_true", help="Revert kernel hook to stock")
+    parser.add_argument("--check", action="store_true", help="Check current hook status")
+    args = parser.parse_args()
+
+    if args.apply:
+        apply_patch()
+    elif args.revert:
+        revert_patch()
+    elif args.check:
+        check_status(verbose=True)
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

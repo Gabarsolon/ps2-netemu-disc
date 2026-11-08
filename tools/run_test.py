@@ -70,14 +70,22 @@ def main():
         print("play:", get(play))
         time.sleep(a.wait)
     if not a.keep:
+        sys.path.insert(0, os.path.join(ROOT, "pico-ds3-bridge", "python"))
+        sys.path.insert(0, r"C:\Users\remus")
         sys.path.insert(0, os.path.expanduser("~"))
         from ps3_controller import PS3Controller
         ctl = PS3Controller("COM9")
         try:
             print("status:", ctl.get_status())
-            for b in ("PS", "CROSS", "LEFT", "CROSS"):
-                print(b, ctl.press(b, 150))
-                time.sleep(2.0 if b == "PS" else 1.2)
+            time.sleep(0.5)
+            print("PS:", ctl.press("PS", 300))
+            time.sleep(2.0)
+            print("CROSS (Select Quit Game):", ctl.press("CROSS", 150))
+            time.sleep(1.2)
+            print("LEFT (Select Yes):", ctl.press("LEFT", 150))
+            time.sleep(0.8)
+            print("CROSS (Confirm Quit):", ctl.press("CROSS", 150))
+            time.sleep(1.5)
         finally:
             ctl.close()
     ok = False
