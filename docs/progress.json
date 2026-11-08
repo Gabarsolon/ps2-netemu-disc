@@ -1,6 +1,6 @@
 {
-  "updated": "2026-11-08",
-  "note": "P13 (agy): ss_server1's live location was not found in the proven-safe 0x100000-0x300000 range (that range holds sysmgr_ss, ss_server2, ss_server3, and LV1 kernel text); it likely lives above 0x300000. The scan stayed inside the approved range the whole time; no faults. Next: extend the safe range upward with more console-approved reads before any patch.",
+  "updated": "2026-11-09",
+  "note": "P15: Implemented position-independent (PIC) Cobra LV2 kernel hook (0x0053BD00) to bypass stock Cobra optical disc hang and execute dual HVSC 183 hypercalls on launch. Successfully transitioned from XMB PlayStation®2 Format Disc icon into ps2_netemu.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
@@ -20,7 +20,7 @@
     {
       "name": "Disc authentication (likely required for any data read)",
       "weight": 15,
-      "done": 15.0
+      "done": 30.0
     },
     {
       "name": "Level 2: emulator disc layer reads from the drive (boot)",

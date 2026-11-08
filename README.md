@@ -9,21 +9,21 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 <!-- progress:start -->
 ## Progress
 
-![Project progress 35%](docs/progress.svg)
+![Project progress 37%](docs/progress.svg)
 
-**Overall: about 35%** (effort-weighted estimate; the real risk is not evenly spread).
+**Overall: about 37%** (effort-weighted estimate; the real risk is not evenly spread).
 
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
 | Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 95% |
 | Level 1: read sector 16 (ISO9660 signature) | 10% | `████░░░░░░` 35% |
-| Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 15.0% |
+| Disc authentication (likely required for any data read) | 15% | `███░░░░░░░` 30.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-08. P13 (agy): ss_server1's live location was not found in the proven-safe 0x100000-0x300000 range (that range holds sysmgr_ss, ss_server2, ss_server3, and LV1 kernel text); it likely lives above 0x300000. The scan stayed inside the approved range the whole time; no faults. Next: extend the safe range upward with more console-approved reads before any patch._
+_Last update: 2026-11-09. P15: Implemented position-independent (PIC) Cobra LV2 kernel hook (0x0053BD00) to bypass stock Cobra optical disc hang and execute dual HVSC 183 hypercalls on launch. Successfully transitioned from XMB PlayStation®2 Format Disc icon into ps2_netemu._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
