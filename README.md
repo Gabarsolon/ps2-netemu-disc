@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-01. P12 (agy, orchestrator-checked against Cobra source): the loaded secure-service pages live in LV1 0x100000..0x300000 (Cobra scans exactly that range); candidate fix is a 4-byte live patch of the ss_server1 profile check. Next: a read-only scan to locate it; the patch itself is a hypervisor write that needs the owner's decision._
+_Last update: 2026-11-08. P13 (agy): ss_server1's live location was not found in the proven-safe 0x100000-0x300000 range (that range holds sysmgr_ss, ss_server2, ss_server3, and LV1 kernel text); it likely lives above 0x300000. The scan stayed inside the approved range the whole time; no faults. Next: extend the safe range upward with more console-approved reads before any patch._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
