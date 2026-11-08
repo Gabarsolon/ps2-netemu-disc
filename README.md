@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-09. P15: Implemented position-independent (PIC) Cobra LV2 kernel hook (0x0053BD00) to bypass stock Cobra optical disc hang and execute dual HVSC 183 hypercalls on launch. Successfully transitioned from XMB PlayStation®2 Format Disc icon into ps2_netemu._
+_Last update: 2026-11-09. P15 follow-up: physical-disc launches produced black screens and all-zero logs; netemu entry and authentication remain unproven. Fixed complete Cobra hook verification and fail-closed writes; offline fault-injection tests pass. See docs/P15_RESUME_AUDIT.md._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

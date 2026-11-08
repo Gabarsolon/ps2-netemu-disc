@@ -1,5 +1,11 @@
 # Phase 15: Cobra LV2 Kernel Hook & Position-Independent Trampoline
 
+**2026-11-09 audit:** the direct-disc launches ended in black screens with
+all-zero logs. Netemu entry, hypercall success, LV1 patch persistence,
+authentication, and sector reads remain unproven. See
+[P15_RESUME_AUDIT.md](P15_RESUME_AUDIT.md) for evidence and patcher fixes.
+The flow and rationale below describe the proposed mechanism.
+
 ## 1. Problem Statement & Background
 
 When attempting to launch physical optical retail PS2 discs directly from the XMB disc icon (`PlayStation®2 Format Disc`) on PS3 Slim consoles running Evilnat 4.93 CEX Cobra 8.5:
@@ -19,10 +25,13 @@ When attempting to launch physical optical retail PS2 discs directly from the XM
    This immediately froze the console on optical disc launch before `ps2_netemu` could even be initialized.
 
 2. **LV1 RAM Reset Across Partition Reboot**:  
-   Applying in-memory patches to `ss_server1` in LV1 RAM from XMB (via `/poke.lv1`) did not persist because `sys_sm_shutdown(0x8204)` tears down and reinitializes guest partitions, resetting those hypervisor pages back to stock firmware defaults.
+   XMB-applied patches were observed stock after reboot. Their state during
+   netemu execution and the precise reset point have not been measured.
 
 3. **Hypercall Restrictions in Guest LPAR**:  
-   Inside the `ps2_netemu` guest partition (`PS2_NE_LPAR`), `HVSC 182` (`lv1_peekd`) and `HVSC 183` (`lv1_poked`) are blocked by the hypervisor security policy (`-6` / `LV1_NO_ENTRY`). The patch *must* be applied during the shutdown transition while LV2 kernel supervisor privileges are still active.
+   Guest probes for `HVSC 182` (`lv1_peekd`) and `HVSC 183` (`lv1_poked`)
+   returned `-6` / `LV1_NO_ENTRY`. Applying patches during LV2 shutdown is the
+   proposed alternative; its success and persistence still need evidence.
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-09",
-  "note": "P15: Implemented position-independent (PIC) Cobra LV2 kernel hook (0x0053BD00) to bypass stock Cobra optical disc hang and execute dual HVSC 183 hypercalls on launch. Successfully transitioned from XMB PlayStation®2 Format Disc icon into ps2_netemu.",
+  "note": "P15 follow-up: physical-disc launches produced black screens and all-zero logs; netemu entry and authentication remain unproven. Fixed complete Cobra hook verification and fail-closed writes; offline fault-injection tests pass. See docs/P15_RESUME_AUDIT.md.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",

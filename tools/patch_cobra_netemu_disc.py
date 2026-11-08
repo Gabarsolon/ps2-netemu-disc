@@ -13,8 +13,8 @@ Problem Solved:
            fatal("Sorry, no optical disc support in ps2_netemu\\n");
        }
      At 0x005308C4: 48 00 00 00 (b 0x005308C4)
-  2. Any in-memory LV1 patches applied from XMB are reset during partition reinitialization on boot.
-  3. ps2_netemu runs in guest partition PS2_NE_LPAR where HVSC 182/183 are denied (-6 / LV1_NO_ENTRY).
+  2. Persistence of XMB-applied LV1 patches into the netemu partition is unproven.
+  3. Guest HVSC 182/183 attempts returned -6 / LV1_NO_ENTRY in prior probes.
 
 Solution:
   Install a Position-Independent (PIC) kernel trampoline into unused alignment space at 0x0053BD00 in Cobra RAM:
@@ -31,6 +31,7 @@ import re
 import argparse
 import urllib.request
 import urllib.error
+from html import unescape
 
 HOST = "192.168.0.169"
 
@@ -96,54 +97,59 @@ def poke_lv2(addr, hex_str, timeout=10):
 
 
 def extract_bytes(html, addr, num_bytes=16):
-    addr_str = f"{addr:08x}"
-    pattern = rf"{addr_str}[ :]+([0-9a-fA-F ]+)"
-    m = re.search(pattern, html, re.IGNORECASE)
-    if not m:
+    # webMAN rounds the displayed address down to 16 bytes and may wrap
+    # individual bytes in highlight tags. Read by displayed address, not URL.
+    memory = re.search(r"<pre\b[^>]*>(.*?)</pre>", html, flags=re.IGNORECASE | re.DOTALL)
+    if memory is None:
         return None
-    raw_hex = m.group(1).strip()
-    parts = raw_hex.split()
-    if len(parts) >= num_bytes:
-        return " ".join(parts[:num_bytes]).lower()
-    return " ".join(parts).lower()
+    html = memory.group(1)
+    html = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
+    html = unescape(re.sub(r"<[^>]*>", "", html))
+    rows = {}
+    pattern = r"(?<![0-9a-fA-F])([0-9a-fA-F]{8})[ :]+((?:[0-9a-fA-F]{2}[ \t]+){15}[0-9a-fA-F]{2})(?![0-9a-fA-F])"
+    for match in re.finditer(pattern, html):
+        base = int(match.group(1), 16)
+        if base in rows or base % 16:
+            return None
+        rows[base] = bytes.fromhex(match.group(2))
+    try:
+        data = bytes(rows[a & ~15][a & 15] for a in range(addr, addr + num_bytes))
+    except KeyError:
+        return None
+    return data.hex(" ")
+
+
+def read_snapshot(verbose=False):
+    """Read every byte that apply/revert may overwrite, including gaps."""
+    sig = extract_bytes(peek_lv2(SIGNATURE_ADDR), SIGNATURE_ADDR, 16)
+    call = extract_bytes(peek_lv2(HOOK_CALL_ADDR), HOOK_CALL_ADDR, 8)
+    size = HOOK_DATA_ADDR + 32 - HOOK_CODE_ADDR
+    slot = extract_bytes(peek_lv2(HOOK_CODE_ADDR), HOOK_CODE_ADDR, size)
+    if sig != EXPECTED_SIGNATURE or call is None or slot is None:
+        print("[-] Safety check failed: signature mismatch or incomplete memory response.")
+        return "ERROR"
+
+    expected = bytearray(size)
+    for address, value in HOOK_CODE_WORDS + HOOK_DATA_WORDS:
+        expected[address - HOOK_CODE_ADDR:address - HOOK_CODE_ADDR + 8] = bytes.fromhex(value)
+    actual = bytes.fromhex(slot)
+    if call == PATCH_CALL_BYTES and actual == expected:
+        state = "ACTIVE"
+    elif call == STOCK_CALL_BYTES and actual == bytes(size):
+        state = "STOCK"
+    else:
+        state = "UNKNOWN"
+    if verbose:
+        print(f"    Callsite at 0x{HOOK_CALL_ADDR:08x}: {call}")
+        print(f"    Full trampoline/data region checked: {size} bytes")
+    return state
 
 
 def check_status(verbose=True):
     if verbose:
         print(f"[*] Reading Cobra stage2 state from {HOST}...")
 
-    # 1. Check signature
-    html = peek_lv2(SIGNATURE_ADDR)
-    sig = extract_bytes(html, SIGNATURE_ADDR, 16)
-    if sig != EXPECTED_SIGNATURE:
-        print(f"[-] SAFETY CHECK FAILED: Signature mismatch at 0x{SIGNATURE_ADDR:08x}!")
-        print(f"    Expected: {EXPECTED_SIGNATURE}")
-        print(f"    Got:      {sig}")
-        return "ERROR"
-
-    # 2. Check callsite
-    html_call = peek_lv2(HOOK_CALL_ADDR)
-    call_bytes = extract_bytes(html_call, HOOK_CALL_ADDR, 8)
-
-    # 3. Check hook code
-    html_code = peek_lv2(HOOK_CODE_ADDR)
-    code_bytes = extract_bytes(html_code, HOOK_CODE_ADDR, 16)
-
-    # 4. Check hook data
-    html_data = peek_lv2(HOOK_DATA_ADDR)
-    data_bytes = extract_bytes(html_data, HOOK_DATA_ADDR, 16)
-
-    if verbose:
-        print(f"    Callsite at 0x{HOOK_CALL_ADDR:08x}: {call_bytes}")
-        print(f"    Hook code at 0x{HOOK_CODE_ADDR:08x}: {code_bytes}")
-        print(f"    Hook data at 0x{HOOK_DATA_ADDR:08x}: {data_bytes}")
-
-    if call_bytes == PATCH_CALL_BYTES:
-        state = "ACTIVE"
-    elif call_bytes == STOCK_CALL_BYTES:
-        state = "STOCK"
-    else:
-        state = "UNKNOWN"
+    state = read_snapshot(verbose)
 
     if verbose:
         print(f"[*] Overall Cobra Hook State: {state}")
@@ -153,7 +159,10 @@ def check_status(verbose=True):
 def apply_patch():
     print("[*] Applying in-memory Position-Independent Cobra Kernel Hook for PS2 Netemu Optical Discs...")
     state = check_status(verbose=False)
-    if state == "ERROR":
+    if state == "ACTIVE":
+        print("[+] Exact hook is already installed and verified.")
+        return True
+    if state != "STOCK":
         print("[-] Aborting apply due to safety check failure.")
         return False
 
@@ -167,6 +176,17 @@ def apply_patch():
     for addr, val in HOOK_CODE_WORDS:
         poke_lv2(addr, val)
 
+    # A dropped write must never leave a branch into incomplete kernel code.
+    for addr, value in HOOK_CODE_WORDS + HOOK_DATA_WORDS:
+        actual = extract_bytes(peek_lv2(addr), addr, 8)
+        if actual != bytes.fromhex(value).hex(" "):
+            print(f"[-] Read-back failed at 0x{addr:08x}; hook branch not activated.")
+            return False
+    call = extract_bytes(peek_lv2(HOOK_CALL_ADDR), HOOK_CALL_ADDR, 8)
+    if call != STOCK_CALL_BYTES:
+        print("[-] Callsite changed during preparation; hook branch not activated.")
+        return False
+
     # 3. Hook the callsite at 0x005308C0
     print(f"[*] Activating kernel hook branch at 0x{HOOK_CALL_ADDR:08x} (-> 0x{HOOK_CODE_ADDR:08x})...")
     poke_lv2(HOOK_CALL_ADDR, "419d06c84800b43c")
@@ -176,10 +196,8 @@ def apply_patch():
     new_state = check_status(verbose=True)
     if new_state == "ACTIVE":
         print("[+] SUCCESS: Cobra Kernel Hook is ACTIVE in LV2 RAM!")
-        print("    Physical optical PS2 discs launched from XMB will now automatically:")
-        print("    1. Trigger kernel-mode HVSC 183 to patch ss_server1 in LV1 RAM.")
-        print("    2. Successfully authenticate physical optical discs (AUTH_VERDICT_OK).")
-        print("    3. Read decrypted disc sectors without black-screen panic.")
+        print("    This verifies RAM bytes only. Hypercall execution, authentication,")
+        print("    sector reads, and successful netemu boot still require console evidence.")
         return True
     else:
         print(f"[-] Verification failed! Current state: {new_state}")
@@ -188,31 +206,46 @@ def apply_patch():
 
 def revert_patch():
     print("[*] Reverting Cobra Kernel Hook to STOCK...")
+    state = check_status(verbose=False)
+    if state == "STOCK":
+        return True
+    if state != "ACTIVE":
+        print("[-] Refusing revert: memory does not match this tool's exact hook.")
+        return False
     poke_lv2(HOOK_CALL_ADDR, "419d06c848000000")
+    if extract_bytes(peek_lv2(HOOK_CALL_ADDR), HOOK_CALL_ADDR, 8) != STOCK_CALL_BYTES:
+        print("[-] Callsite restore failed; trampoline retained.")
+        return False
     for addr, _ in HOOK_CODE_WORDS:
         poke_lv2(addr, "0000000000000000")
     for addr, _ in HOOK_DATA_WORDS:
         poke_lv2(addr, "0000000000000000")
     state = check_status(verbose=True)
     print(f"[*] Revert complete. Current state: {state}")
+    return state == "STOCK"
 
 
 def main():
     parser = argparse.ArgumentParser(description="Cobra Netemu Optical Disc Kernel Patcher")
-    parser.add_argument("--apply", action="store_true", help="Apply kernel hook in LV2 RAM")
-    parser.add_argument("--revert", action="store_true", help="Revert kernel hook to stock")
-    parser.add_argument("--check", action="store_true", help="Check current hook status")
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument("--apply", action="store_true", help="Apply kernel hook in LV2 RAM")
+    actions.add_argument("--revert", action="store_true", help="Revert kernel hook to stock")
+    actions.add_argument("--check", action="store_true", help="Check current hook status")
     args = parser.parse_args()
 
     if args.apply:
-        apply_patch()
+        return 0 if apply_patch() else 1
     elif args.revert:
-        revert_patch()
+        return 0 if revert_patch() else 1
     elif args.check:
-        check_status(verbose=True)
+        return 0 if check_status(verbose=True) in ("ACTIVE", "STOCK") else 1
     else:
         parser.print_help()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        sys.exit(main())
+    except (OSError, ValueError) as error:
+        print(f"[-] Operation failed: {error}")
+        sys.exit(1)
