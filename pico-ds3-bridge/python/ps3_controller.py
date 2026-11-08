@@ -27,7 +27,13 @@ class PS3Controller:
 
     def press(self, button, duration_ms=100):
         """Tap a button (CROSS, CIRCLE, SQUARE, TRIANGLE, UP, DOWN, LEFT, RIGHT, L1, R1, L2, R2, START, SELECT, PS)."""
-        return self.send_cmd(f"PRESS {button} {duration_ms}")
+        duration_ms = max(20, int(duration_ms))
+        response = self.send_cmd(f"PRESS {button} {duration_ms}")
+        # Firmware acknowledges when the timed press starts. Wait until it
+        # finishes so close() cannot cancel it with an immediate RELEASE.
+        if response.startswith("OK PRESS "):
+            time.sleep(duration_ms / 1000.0)
+        return response
 
     def down(self, button):
         """Hold a button down."""
@@ -43,11 +49,11 @@ class PS3Controller:
 
     def ps_button(self, duration_ms=300):
         """Tap the PlayStation (Home) button."""
-        return self.send_cmd(f"PRESS PS {duration_ms}")
+        return self.press("PS", duration_ms)
 
     def hold_ps_button(self, duration_ms=2000):
         """Hold the PS (Home) button (brings up In-Game / Turn Off Console menu)."""
-        return self.send_cmd(f"PRESS PS {duration_ms}")
+        return self.press("PS", duration_ms)
 
     def release_all(self):
         """Release all buttons and center all analog sticks."""

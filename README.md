@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-09. P15 follow-up: physical-disc launches produced black screens and all-zero logs; netemu entry and authentication remain unproven. Fixed complete Cobra hook verification and fail-closed writes; offline fault-injection tests pass. See docs/P15_RESUME_AUDIT.md._
+_Last update: 2026-11-09. P15 carrier test: diagnostic menu reached and ERR_STAT observed; fresh HDD log has 25 records but no auth/sector result. RAM patches verified before launch and stock after XMB return. Fixed controller tap cancellation; diagnostic logging is next. See docs/P15_CARRIER_RESULT.md._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

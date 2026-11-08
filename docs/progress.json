@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-09",
-  "note": "P15 follow-up: physical-disc launches produced black screens and all-zero logs; netemu entry and authentication remain unproven. Fixed complete Cobra hook verification and fail-closed writes; offline fault-injection tests pass. See docs/P15_RESUME_AUDIT.md.",
+  "note": "P15 carrier test: diagnostic menu reached and ERR_STAT observed; fresh HDD log has 25 records but no auth/sector result. RAM patches verified before launch and stock after XMB return. Fixed controller tap cancellation; diagnostic logging is next. See docs/P15_CARRIER_RESULT.md.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
