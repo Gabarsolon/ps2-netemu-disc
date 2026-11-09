@@ -1,0 +1,30 @@
+[
+  {
+    "scenario": "reply_ok",
+    "summary": "P16L1 auth=OK st=00000000 fl=00000007 mag=0000face op=0000000000005005 rd=112 wr=112 rrc=0 wrc=0 sector_rc=0 send_rc=0 async=0000000000000000 class=UNCHANGED a5=2048 sample=a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5 logs=36 skip=0 fail=0 busy=00000000 tries=1"
+  },
+  {
+    "scenario": "nonzero_status",
+    "summary": "P16L1 auth=ERR_STAT st=00000016 fl=00000000 mag=0000face op=0000000000005005 rd=112 wr=112 rrc=0 wrc=0 sector_rc=0 send_rc=0 async=0000000000000000 class=UNCHANGED a5=2048 sample=a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5 logs=36 skip=0 fail=0 busy=00000000 tries=1"
+  },
+  {
+    "scenario": "short_reply",
+    "summary": "P16L1 auth=SHORT st=00000000 fl=00000000 mag=0000face op=0000000000005005 rd=32 wr=112 rrc=0 wrc=0 sector_rc=0 send_rc=0 async=0000000000000000 class=UNCHANGED a5=2048 sample=a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5 logs=36 skip=0 fail=0 busy=00000000 tries=1"
+  },
+  {
+    "scenario": "timeout",
+    "summary": "P16L1 auth=TIMEOUT st=00000000 fl=00000000 mag=00000000 op=0000000000000000 rd=0 wr=112 rrc=0 wrc=0 sector_rc=0 send_rc=0 async=0000000000000000 class=UNCHANGED a5=2048 sample=a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5 logs=36 skip=0 fail=0 busy=00000000 tries=1"
+  },
+  {
+    "scenario": "write_err",
+    "summary": "P16L1 auth=ERR_WRITE st=00000000 fl=00000000 mag=00000000 op=0000000000000000 rd=0 wr=0 rrc=0 wrc=-1 sector_rc=0 send_rc=0 async=0000000000000000 class=UNCHANGED a5=2048 sample=a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5 logs=34 skip=0 fail=0 busy=00000000 tries=1"
+  },
+  {
+    "scenario": "param_err",
+    "summary": "P16L1 auth=SKIPPED st=00000000 fl=00000000 mag=00000000 op=0000000000000000 rd=0 wr=0 rrc=0 wrc=0 sector_rc=0 send_rc=0 async=0000000000000000 class=UNCHANGED a5=2048 sample=a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5 logs=23 skip=0 fail=0 busy=00000000 tries=1"
+  },
+  {
+    "scenario": "busy_after_25",
+    "summary": "P16L1 auth=ERR_STAT st=00000016 fl=00000000 mag=0000face op=0000000000005005 rd=112 wr=112 rrc=0 wrc=0 sector_rc=0 send_rc=0 async=0000000000000000 class=UNCHANGED a5=2048 sample=a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5 logs=25 skip=12 fail=1 busy=00000040 tries=2"
+  }
+]

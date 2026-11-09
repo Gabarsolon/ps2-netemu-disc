@@ -120,3 +120,8 @@ netemu_p11c/tmp/
 netemu_p11c/build/
 netemu_p11c/evidence/*patch_table*.json
 *.uf2
+
+netemu_p16/settings/
+netemu_p16/tmp/
+netemu_p16/build/
+netemu_p16/evidence/*patch_table*.json
