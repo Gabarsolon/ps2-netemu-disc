@@ -18,6 +18,10 @@ ADDRESS = 0x714638
 STOCK = bytes.fromhex('f821ff517c0802a6')
 SENTINEL = bytes.fromhex('3860005a4e800020')  # li r3,0x5a; blr (before prologue)
 FOLLOWING = bytes.fromhex('fba10098fbc100a0')
+TARGETS = {
+    'ps2': (ADDRESS, STOCK, FOLLOWING),
+    'gameos': (0x7147e8, bytes.fromhex('f821ff617c0802a6'), bytes.fromhex('fb8100807c7c1b78')),
+}
 
 
 def request(path):
@@ -25,46 +29,50 @@ def request(path):
         return response.read().decode('utf-8', errors='replace')
 
 
-def check():
-    value = extract_bytes(request(f'/peek.lv1?{ADDRESS:x}'), ADDRESS, 16)
+def check(target='ps2'):
+    address, stock, following = TARGETS[target]
+    value = extract_bytes(request(f'/peek.lv1?{address:x}'), address, 16)
     if value is None:
         return 'UNKNOWN'
     raw = bytes.fromhex(value)
-    if raw == STOCK + FOLLOWING:
+    if raw == stock + following:
         return 'STOCK'
-    if raw == SENTINEL + FOLLOWING:
+    if raw == SENTINEL + following:
         return 'SENTINEL'
     return 'UNKNOWN'
 
 
-def set_state(wanted):
-    state = check()
+def set_state(wanted, target='ps2'):
+    address, stock, _ = TARGETS[target]
+    state = check(target)
     if state == wanted:
         print('Already ' + wanted + '; no write.')
         return True
     if state not in ('STOCK', 'SENTINEL'):
         print('Unknown helper bytes; refusing to write.')
         return False
-    value = SENTINEL if wanted == 'SENTINEL' else STOCK
-    request(f'/poke.lv1?{ADDRESS:x}={value.hex()}')
-    state = check()
+    value = SENTINEL if wanted == 'SENTINEL' else stock
+    request(f'/poke.lv1?{address:x}={value.hex()}')
+    state = check(target)
     print('Read-back state:', state)
     return state == wanted
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--target', choices=TARGETS, default='ps2',
+                        help='ps2: opcode 5005 helper; gameos: opcode 5004 helper')
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument('--check', action='store_true')
     actions.add_argument('--apply', action='store_true')
     actions.add_argument('--revert', action='store_true')
     args = parser.parse_args()
     if args.apply:
-        return 0 if set_state('SENTINEL') else 1
+        return 0 if set_state('SENTINEL', args.target) else 1
     if args.revert:
-        return 0 if set_state('STOCK') else 1
-    state = check()
-    print(f'Helper 0x{ADDRESS:08x}: {state}')
+        return 0 if set_state('STOCK', args.target) else 1
+    state = check(args.target)
+    print(f'Helper 0x{TARGETS[args.target][0]:08x}: {state}')
     return 0 if state != 'UNKNOWN' else 1
 
 

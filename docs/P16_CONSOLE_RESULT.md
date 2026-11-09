@@ -73,10 +73,41 @@ a BOOT2 entry. The private copy is in `local_only/p16_lv2_readproof/`. This is
 positive evidence of physical-disc file access in GameOS, not proof of sector
 access from the netemu partition.
 
+## GameOS positive control
+
+Primary 4.93 code tracing established that syscall 864 does not expose opcode
+`0x5005` directly. A separate opcode-`0x5004` helper at physical `0x7147e8`
+provides a GameOS control on the same 4 KiB code page as the PS2 helper.
+Its original first 16 bytes were checked, the entry was temporarily replaced
+with `li r3,0x5a; blr`, and the sentinel was read back.
+
+Only while that entry marker was verified active, webMAN invoked scalar
+`syscall864(0x5004,0x46)`. The forced early return skips the helper's normal
+drive operations and error-remapping logic. The exact response was:
+
+`syscall2(864) => 0xffffffff8001055a`
+
+This matches the offline proof: status `0x5a` survives the secure-service
+executor and serializer, and the kernel wrapper ORs it with `0x80010500`.
+The original bytes were restored immediately in a finally block and read back
+as stock. No unpatched baseline call to this state-changing mode was sent.
+
+Artifacts: `local_only/p16_host_marker_20261109_111120/`. The fixed-target
+tool is `tools/ss1_auth_sentinel.py --target gameos`; six offline tests cover
+both targets' signatures, exact rollback, unknown bytes and dropped writes.
+The HTTP syscall syntax is documented by the
+[webMAN maintainer](https://github.com/aldostools/webMAN-MOD/wiki/Web-Commands).
+
+**PROVEN:** the GameOS service image at the expected physical mapping executed
+an injected marker. This is stronger than a data read-back alone.
+**UNKNOWN:** the relationship to the emulator's service instance, reload point,
+and instruction visibility at its different helper entry. This control does
+not turn the earlier guest marker's absence into proof of any one cause.
+
 ## Remaining investigation
 
-Keep the successful logger build. Establish a positive control for the temporary
-marker in the known GameOS service context, or identify precisely which service
-instance/mapping handles the netemu VUART request. Continue from primary ABI and
+Keep the successful logger build. With the GameOS positive control established,
+identify precisely which service instance/mapping handles the netemu VUART
+request and whether a same-helper comparison is feasible. Continue from primary ABI and
 launch-path evidence; neither another blind bypass nor a flash-resident service
 change is justified by these two results.

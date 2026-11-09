@@ -15,6 +15,7 @@ class SentinelTests(unittest.TestCase):
         self.data = bytearray(bytes(8) + sentinel.STOCK + sentinel.FOLLOWING + bytes(8))
         self.writes = []
         self.drop = False
+        self.base = 0x714630
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
@@ -28,7 +29,7 @@ class SentinelTests(unittest.TestCase):
                 self.data[8:8 + len(data)] = data
         rows = []
         for offset in (0, 16):
-            rows.append(f'{0x714630 + offset:08X}  {self.data[offset:offset + 16].hex(" ")}  ................')
+            rows.append(f'{self.base + offset:08X}  {self.data[offset:offset + 16].hex(" ")}  ................')
         return '<div>Close</div><pre>' + '<br>'.join(rows) + '</pre>'
 
     def test_roundtrip_preserves_neighbor_bytes(self):
@@ -62,6 +63,17 @@ class SentinelTests(unittest.TestCase):
         with patch.object(sentinel, 'request', return_value='<pre>unavailable</pre>'):
             self.assertFalse(sentinel.set_state('SENTINEL'))
         self.assertEqual(self.writes, [])
+
+    def test_gameos_target_uses_own_signature_and_rollback(self):
+        address, stock, following = sentinel.TARGETS['gameos']
+        self.base = address & ~15
+        self.data[8:24] = stock + following
+        original = bytes(self.data)
+        self.assertEqual(sentinel.check('gameos'), 'STOCK')
+        self.assertTrue(sentinel.set_state('SENTINEL', 'gameos'))
+        self.assertTrue(sentinel.set_state('STOCK', 'gameos'))
+        self.assertEqual(bytes(self.data), original)
+        self.assertTrue(all(path.startswith('/poke.lv1?7147e8=') for path in self.writes))
 
 
 if __name__ == '__main__':
