@@ -201,3 +201,53 @@ immediately guarantees successful key calculation are stronger than the
 evidence. They should be treated as superseded by this audit and the measured
 carrier results. No evidence here justifies modifying flash-resident secure
 services or switching partition types.
+
+## P17 structural corrections (2026-11-09)
+
+Corrections and refinements from the offline P17 phase
+(`docs/P17_VUART_ROUTING.md`), all with corrected tooling
+(`elfphdrs`, fixed `elfwords`, `dumpfind`, `dumpstrs`, clip-safe
+`diff_lv1_vs_elf`); earlier `elfsearch`-based attributions were re-verified and
+stand.
+
+1. **Second-marker static VA is `0x800207E8`, not `0x800247E8`.** The old
+   `0x800247E8 → 0x7187E8` note was arithmetic drift; peeking static
+   `0x800207E8` shows `f821ff61 7c0802a6 fb810080 7c7c1b78`, matching dump
+   bytes at phys `0x7147E8` under the proven copy base `0x6F4000`.
+   Qualification: this 32-byte prologue is not unique within the firmware
+   corpus — it occurs 3× in `sysmgr_ss` (`0x80022B00/0x80022C78/0x80023078`).
+   The attribution of `0x7147E8` to `ss_server1` rests on the phys layout
+   inside the proven `ss_server1` region, not on prologue uniqueness.
+2. **The call site `0x8001E7AC` belongs to executor `0x8001E760`, which serves
+   op `0x5004`, not the op-`0x5005` executor.** Proven wiring: ctor
+   `0x8001C3D4` registers op `0x5004`/service `0x5000` with cell
+   `0xC000E288` → vtable `0x80058718` → `vtable[9] = 0xC00074D0` → descriptor
+   row holding executor `0x8001E760`; `0x8001E760` dispatches to the
+   `0x800207E8` helper (sub-ops `0x29/0x46/0x52/...`) or the `0x5A` fastpath
+   `0x80020BC8`. The op-`0x5005` executor remains `0x8001E724 → 0x80020638`
+   (ctor `0x8001C418`, cell `0xC000E290`, vtable `0x800586A8`,
+   `vtable[9] = 0xC00074B8`). There is no static `bl/ba` into `0x8001E760`;
+   executors are reached only through their descriptor slot. Consequently the
+   GameOS positive control at `0x7147E8` exercised the op-`0x5004` path, and
+   the earlier note that tied `0x800207E8` to the 0x5005 executor is
+   superseded.
+3. **Full-copy identity claim, quantified.** The proven zero-diff region is
+   img `0xC000..0x59D10` (phys `0x700000..0x74DD10`, 79,684 words, 0 diffs,
+   rodata included; `port_id_table` at static `0x800560D3` verified). The img
+   `0..0xC000` window (phys `0x6F4000..0x700000`) is below the dump's
+   coverage and remains unchecked; all patch sites used by this project
+   (`0x713210/0x713248`, `0x714638/0x714710/0x714720`, `0x7147E8`) are inside
+   the covered region.
+4. **Resident vtable corroboration.** The static word `0xC00074B8`
+   (vtable[9] hi-word at `0x800586F4`) appears in RAM at phys `0x74C6F4` =
+   `0x6F4000 + 0x586F4`, consistent with the same copy being resident and
+   structurally intact.
+5. **dump1 verdict.** `lv1_mem_100000_300000.bin` contains no byte-identical
+   copy of `ss_server1`/`ss_server2`/`ss_server3`/`sysmgr_ss` for any tested
+   candidate base (`0x13828C`, `0x15E028`, `0x15E000`, `0xFB000`, `0x165000`,
+   `0x169000` — diff counts in P17). The `0x169000` `ss_server3`-family image
+   diverges in `0x7936` words with img `0x4000..0x14000` byte-clean.
+6. **Misoffset region retraction completed.** `SCE_CELLOSS_SS_SPM` is present
+   in neither dump (`dumpfind`) nor any of the 7 module ELFs (`elfsearch`);
+   the earlier "phys ~0x269000 ACM/SLL/SCE_CELLOSS_SS_SPM region" content was
+   an artifact of the offset bug and is retracted as unattributable.

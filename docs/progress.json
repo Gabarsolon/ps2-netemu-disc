@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-09",
-  "note": "P16 logger hardware-validated: two complete summaries and END records recovered UFS-lock contention. GameOS marker control executed, but the emulator marker did not; VUART endpoints are caller-scoped. Auth still returns 0x16 and sector 16 remains A5. See docs/P16_SERVICE_CONTEXT.md.",
+  "note": "P17 complete: op-class wiring of ss_server1 service 0x5000 family proven; 0x5004 executor 0x8001E760->0x800207E8 (GameOS helper at 0x7147E8) vs 0x5005 executor 0x8001E724->0x80020638 (auth helper at 0x714638); dump2 ss_server1 @0x6F4000 byte-identical over 311.3 KB; dump1 has no byte-identical module copies; misoffset region claims (SCE_CELLOSS_SS_SPM) retracted. Docs: P17_VUART_ROUTING.md, P16_AUTH_ANALYSIS.md corrections appended, P16_CONSOLE_RESULT.md reconciled. AGENTS.md renamed from CLAUDE.md.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",

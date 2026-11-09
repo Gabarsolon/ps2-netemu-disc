@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-09. P16 logger hardware-validated: two complete summaries and END records recovered UFS-lock contention. GameOS marker control executed, but the emulator marker did not; VUART endpoints are caller-scoped. Auth still returns 0x16 and sector 16 remains A5. See docs/P16_SERVICE_CONTEXT.md._
+_Last update: 2026-11-09. P17 complete: op-class wiring of ss_server1 service 0x5000 family proven; 0x5004 executor 0x8001E760-&gt;0x800207E8 (GameOS helper at 0x7147E8) vs 0x5005 executor 0x8001E724-&gt;0x80020638 (auth helper at 0x714638); dump2 ss_server1 @0x6F4000 byte-identical over 311.3 KB; dump1 has no byte-identical module copies; misoffset region claims (SCE_CELLOSS_SS_SPM) retracted. Docs: P17_VUART_ROUTING.md, P16_AUTH_ANALYSIS.md corrections appended, P16_CONSOLE_RESULT.md reconciled. AGENTS.md renamed from CLAUDE.md._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

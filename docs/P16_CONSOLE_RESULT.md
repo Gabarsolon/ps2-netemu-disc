@@ -113,3 +113,28 @@ launch-path evidence; neither another blind bypass nor a flash-resident service
 change is justified by these two results.
 See [P16_SERVICE_CONTEXT.md](P16_SERVICE_CONTEXT.md) for the caller-scoped
 endpoint lookup and the limits of the GameOS syscall interface.
+
+## Reconciliation with the P17 routing findings (2026-11-09)
+
+`docs/P17_VUART_ROUTING.md` proves the op-class wiring that explains both
+console observations without changing any conclusion here:
+
+- The GameOS positive control (`0x5A` returned as `0x8001055a`) exercised the
+  **op-0x5004** chain exactly as now proven: ctor `0x8001C3D4` → vtable
+  `0x80058718` `vtable[9]` → executor `0x8001E760` → helper `0x800207E8` at
+  phys `0x7147E8`. The kernel-side `0x8001055a` matches that op's
+  kernel wrapper OR behavior.
+- The emulator `0x5005` negative (`0x0016` with the `0x714638` marker) does
+  not contradict the proven retail-identical resident copy. Structure shows
+  op-0x5004 and op-0x5005 share only the driver family (same object/vtable
+  architecture) but use different executors and helpers; the positive control
+  therefore proves execution of the op-0x5004 path in the dumped copy, while
+  the op-0x5005 helper may have run from a stale instruction-cache line, from
+  a different serving entity bound to port `0x51`, or through a different
+  runtime dispatch — all UNKNOWN (see P17's three candidate causes, with
+  stale I-cache the most parsimonious).
+- The proposed read-only next steps (multi-target RAM enumeration of the
+  `0x80020638` code words, an executor-entry stub at `0x8001E724` /
+  phys `0x713724` as a cold-line discriminator, and a one-time read-only dump
+  of the `0x300000..0x700000` LV1 window) take over from this file's
+  "Remaining investigation" as the concrete follow-ups.

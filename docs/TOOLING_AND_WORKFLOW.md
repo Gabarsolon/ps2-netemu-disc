@@ -21,7 +21,7 @@ How a change goes from idea to a console test. Proven in the Buzz! Bridge work; 
 ## Build (when there is a payload)
 
 - Copy `reference/buzz-netemu-build/{build.py,make_package.py,ppcasm.py,selfdec.py,resign_self_installed.py}` into a new `netemu/` dir; adapt the config (hook list, code slot, labels). Do not edit the reference copies.
-- Compile with LLVM (flags in `CLAUDE.md`), link into the code slot, patch entry points, repack the SELF. Output goes to `local_only/` (never git).
+- Compile with LLVM (flags in `AGENTS.md`), link into the code slot, patch entry points, repack the SELF. Output goes to `local_only/` (never git).
 - Code slot is 14,320 bytes; Buzz used all but 16. A disc backend probably needs its own space: plan how to extend (see `NETEMU_KNOWLEDGE.md`, memory rules).
 
 ## Validate on the PC before any console test
