@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-09. P16 L1 console-tested: complete auth/sector summaries and END records now survive UFS-lock contention. Valid 0x5005 replies still return 0x16; sector 16 remains all A5. Temporary helper marker was not observed; service context is under investigation. See docs/P16_CONSOLE_RESULT.md._
+_Last update: 2026-11-09. P16 logger hardware-validated: two complete summaries and END records recovered UFS-lock contention. GameOS marker control executed, but the emulator marker did not; VUART endpoints are caller-scoped. Auth still returns 0x16 and sector 16 remains A5. See docs/P16_SERVICE_CONTEXT.md._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

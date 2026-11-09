@@ -1,9 +1,10 @@
-"""Temporary, fixed-address diagnostic: make the PS2 auth helper return 0x5A.
+"""Temporary, fixed-address diagnostic: make an auth helper return 0x5A.
 
 This deliberately reports failure, performs no authentication, and writes only
 RAM. A matching reply is positive evidence that this helper instance executed.
 An unchanged reply does not by itself prove when or why a patch disappeared.
-Exact 4.93 bytes and offline ABI proof: docs/P16_AUTH_ANALYSIS.md.
+Exact 4.93 bytes and offline ABI proof: docs/P16_AUTH_ANALYSIS.md and
+docs/P16_SERVICE_CONTEXT.md. Both target addresses are fixed and preflighted.
 """
 import argparse
 from pathlib import Path

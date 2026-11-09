@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-09",
-  "note": "P16 L1 console-tested: complete auth/sector summaries and END records now survive UFS-lock contention. Valid 0x5005 replies still return 0x16; sector 16 remains all A5. Temporary helper marker was not observed; service context is under investigation. See docs/P16_CONSOLE_RESULT.md.",
+  "note": "P16 logger hardware-validated: two complete summaries and END records recovered UFS-lock contention. GameOS marker control executed, but the emulator marker did not; VUART endpoints are caller-scoped. Auth still returns 0x16 and sector 16 remains A5. See docs/P16_SERVICE_CONTEXT.md.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",

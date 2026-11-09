@@ -111,3 +111,5 @@ identify precisely which service instance/mapping handles the netemu VUART
 request and whether a same-helper comparison is feasible. Continue from primary ABI and
 launch-path evidence; neither another blind bypass nor a flash-resident service
 change is justified by these two results.
+See [P16_SERVICE_CONTEXT.md](P16_SERVICE_CONTEXT.md) for the caller-scoped
+endpoint lookup and the limits of the GameOS syscall interface.
