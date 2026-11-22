@@ -98,3 +98,9 @@ purchased or tested during that discussion.
 - **A netemu probe that opens the optical drive is NOT fail-open.** After any
   such test, restore the stock netemu (installer) BEFORE any further PS2 launch,
   because without the live A+B patches the probe powers the console off again.
+- **Liveness detection:** use webMAN **HTTP** (`http://192.168.0.169/`) plus the
+  Tapo plug wattage to tell console state — NOT FTP (FTP gave false "no return"
+  and caused a needless plug cycle of a live console). A healthy PS2 run makes
+  HTTP go offline then return; the on-HDD snapshot file is the ground truth that
+  a clean PS2 run completed. **Confirm the console is actually OFF (HTTP down AND
+  low wattage, or owner says so) BEFORE any smart-plug cycle.**
