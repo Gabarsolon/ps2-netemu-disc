@@ -9,21 +9,21 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 <!-- progress:start -->
 ## Progress
 
-![Project progress 35%](docs/progress.svg)
+![Project progress 38%](docs/progress.svg)
 
-**Overall: about 35%** (effort-weighted estimate; the real risk is not evenly spread).
+**Overall: about 38%** (effort-weighted estimate; the real risk is not evenly spread).
 
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
 | Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 97% |
-| Level 1: read sector 16 (ISO9660 signature) | 10% | `████░░░░░░` 35% |
+| Level 1: read sector 16 (ISO9660 signature) | 10% | `██████░░░░` 60% |
 | Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 15.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-22. CONSOLE-PROVEN 2026-11-22: owned_control got status=owned on hardware - one real allocator call granted a fresh 8192-byte block. Live owned memory: A EA 0x80022440 / LPAR 0x3b22440; command EA 0x80023480 / LPAR 0x3b23480; data EA 0x80023500 / LPAR 0x3b23500; pool P 0x3b00000 E 0x80000000 (P+(A-E) confirmed). pattern_pass true, snapshot UFS write completed, clean XMB return at 73s, no freeze. Stock restored+verified. NEXT: drive-read control (ATAPI into owned data region, matching completion, bounded polling) - needs building+validation before next console run. Physical TDU sector delivery, disc auth, disc boot still UNKNOWN. Direct /play.ps3 physical-disc route needs LV1 ss_server3 + LV2 Cobra live RAM patches (owner OK required)._
+_Last update: 2026-11-22. CONSOLE-PROVEN 2026-11-22: owned_control got status=owned on hardware - one real allocator call granted a fresh 8192-byte block. Live owned memory: A EA 0x80022440 / LPAR 0x3b22440; command EA 0x80023480 / LPAR 0x3b23480; data EA 0x80023500 / LPAR 0x3b23500; pool P 0x3b00000 E 0x80000000 (P+(A-E) confirmed). pattern_pass true, snapshot UFS write completed, clean XMB return at 73s, no freeze. Stock restored+verified. NEXT: drive-read control (ATAPI into owned data region, matching completion, bounded polling) - needs building+validation before next console run. Physical TDU sector delivery, disc auth, disc boot still UNKNOWN. Direct /play.ps3 physical-disc route needs LV1 ss_server3 + LV2 Cobra live RAM patches (owner OK required). | 2026-11-22 PROVEN: GameOS reads inserted TDU disc files over FTP (SYSTEM.CNF BOOT2=SLES_544.66, boot ELF 4658176B). Disc authenticated+readable in GameOS; netemu still HDD/network-only during PS2 mode. Path: stage disc to ISO/HDD-or-network source, launch via netemu proven ISO file path._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

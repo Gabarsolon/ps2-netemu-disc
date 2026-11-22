@@ -63,3 +63,23 @@ and is the thing to solve in this route, instead of making netemu open the drive
 
 Until the owner picks, no optical-open build is sent to the console (it is a
 PROVEN power-off).
+
+## UPDATE 2026-11-22: disc is READABLE in GameOS now (PROVEN console/FTP)
+
+FTP read of the inserted TDU disc succeeded with no extra unlock step:
+- `/dev_bdvd/` lists `SYSTEM.CNF, IOP, OVERLAYS, CNF, NETGUI, MESSAGE.TXT, EURO,
+  TDUPS2A.PCK, TDUPS2B.PCK, TDUIOP.PCK, ...`
+- `/dev_bdvd/SYSTEM.CNF` (54 B): `BOOT2 = cdrom0:\SLES_544.66;1  VER = 1.02  VMODE=...`
+- `/dev_bdvd/SLES_544.66` (4,658,176 B): valid PS2 EE ELF (`\x7fELF`, type 2, EM 8=MIPS).
+
+So webMAN/Cobra has the disc authenticated and its **file data** reachable in
+GameOS. The earlier P0B ENXIO/EIO came from a raw unauthenticated probe.
+
+**Implication for the chosen path (Cobra feeds netemu):** the netemu still cannot
+read the optical drive during PS2 mode (the wall above), and only the HDD/network
+are reachable then. So the disc content must be staged to a netemu-reachable
+device before/at launch. Since GameOS can read every file, the realistic
+non-firmware deliverable is: build an ISO9660 image of the disc (or an on-demand
+HDD/network-backed sector source) and launch it through the netemu's proven ISO
+file path. A fully copy-free straight-from-optical read during play remains
+blocked without the declined firmware (optical bridge unpowered for PS2_NE_LPAR).
