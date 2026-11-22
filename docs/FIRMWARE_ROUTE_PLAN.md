@@ -72,3 +72,14 @@ read-proof milestone (GOAL_AND_PLAN P2).
 - A, B: **CONFIRMED offline** against module `07c0bd2a`; live bytes to be
   peek-verified before poking. Patcher: `tools/patch_sysmgr_optical.py`.
 - C, D: not built. Heavy netemu build (extends `experiments/netemu_owned_control`).
+
+## UPDATE: A/B located + stock-verified live (2026-11-22)
+
+`tools/patch_sysmgr_optical.py --check` scanned `0x110000..0x1a0000` (535552 B
+mapped, 3 runs) and found both sites uniquely, matching the offline module:
+- A ability-bit: phys `0x119334` live `7c004838` [STOCK] (VA 0x8001e334).
+- B bridge-power: phys `0x118ad8` live `38600001` [STOCK] (VA 0x8001dad8).
+Physical base this boot: VA 0x80000000 -> phys 0xFB000 (contiguous here). The tool
+locates by signature each run, so per-boot relocation is handled. `--apply` pokes
+A->60000000 and B->480003f4; `--restore` reverts; reboot also clears (RAM only).
+NOT yet applied: waits for the C/D netemu probe so there is something to test.
