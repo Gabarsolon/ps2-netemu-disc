@@ -12,8 +12,7 @@ Nothing for this goal is built yet. Everything about the disc path is a hypothes
 
 ## Safety rules (hard)
 
-- **Never run install scripts or anything that writes to the PS3 yourself.** Write the script, parse-check it (`[System.Management.Automation.Language.Parser]::ParseFile` / `bash -n`), give the user the exact command, and let them run it. Reading from the PS3 (FTP `curl.exe ftp://192.168.0.169/...`, webMAN GET pages) only when the user asks or has approved that step, and read-only.
-- **Never write to `/dev_flash` except through the proven procedure** (webMAN `dev_blind?1`, FTP to `/dev_blind/ps2emu/ps2_netemu.self`, read back and hash-compare, `dev_blind?0` in a `finally`), with a hash allow-list of known files, a backup of the current file first (PC `backups/` plus `/dev_hdd0/<project>/netemu_backup/`), and a restore script ready BEFORE the first experiment. No restart is needed after replacing the netemu.
+- **Console flashing permissions**: The agent is authorized to install `ps2_netemu.self` only, strictly through the proven procedure (`tools/install_netemu.ps1`: webMAN `dev_blind?1`, FTP to `/dev_blind/ps2emu/ps2_netemu.self`, read back and hash-compare, `dev_blind?0` in a `finally`), with a backup of the current file first (PC `local_only/backups/` plus `/dev_hdd0/ps2netemudisc/netemu_backup/`). No other `/dev_flash` files may ever be written.
 - A bad netemu only breaks PS2 games; restore with the script or reinstall firmware. Still: ask before each new risky experiment, say what the worst case is, and keep every build **fail-open** (if anything is not exactly as expected, do nothing and let stock behavior run).
 - Any store into the emulator's read-only memory powers the PS3 off. See the memory rules in `docs/NETEMU_KNOWLEDGE.md`; keep every write inside proven RW ranges and audit store targets on the PC before shipping a build.
 - Never modify the user's original ISOs/zips or discs' dumps. Patched copies only. Do not distribute game data or discs' contents.
@@ -43,7 +42,30 @@ Nothing for this goal is built yet. Everything about the disc path is a hypothes
 
 ## Layout
 
+- `experiments/`: netemu build variants moved here on 2026-11-22, preserving
+  their names and contents. Prefix historical root `netemu*` commands with
+  `experiments/`. Keep the new repository-root derivations in moved scripts.
 - `docs/` knowledge, plan, open questions, the starter prompt for a new chat.
 - `reference/` copies of the working Buzz! netemu build/test/installer sources (text only). Use as templates.
 - `tools/` this project's tools (installer for any finished SELF, etc.).
 - `local_only/` gitignored: stock/modified SELFs, ELF dumps, logs, console captures.
+
+## Active owner instructions (2026-11-22)
+
+The owner explicitly authorized continued build/install/console tests toward
+booting the inserted physical TDU disc (SLES_544.66), using the prior Buzz ISO
+as a diagnostic carrier where appropriate, without asking further questions.
+This supersedes per-test permission and hand-over preferences for this run.
+All other safety boundaries remain: proven netemu installer and backups,
+no other flash-file writes, audited RW stores, no PC input simulation or
+desktop screenshots, no process termination, no public uploads/pushes.
+
+Only after evidence of a hard freeze, the owner authorized cutting and
+restoring smart-plug power, then notifying them to press the physical power
+button. Network absence in PS2 mode is normal and alone is not a freeze.
+Continue independent offline work while awaiting manual recovery.
+
+See docs/PS3_BLUETOOTH_WAKE.md for the working Linux Bluetooth backend and
+the unresolved abrupt-cut limitation. PowerOnReset is saved as 1; its effect
+on this retail console remains UNKNOWN. No hardware pusher/CEC adapter was
+purchased or tested during that discussion.

@@ -1,0 +1,151 @@
+"""Offline inert snapshot build. No JVM, git or device/console operations."""
+from pathlib import Path
+import hashlib
+import json
+import os
+import runpy
+import struct
+import subprocess
+import sys
+
+HERE=Path(__file__).resolve().parent
+ROOT=HERE.parents[1]
+OUT=ROOT/'local_only/snapshot'
+TEMPLATE=ROOT/'experiments/netemu_autoreturn'
+LLVM=Path('C:/Program Files/LLVM/bin')
+ELF_SHA='63f12b7e00959c758f8aedfd23d1b8bc78e8ae7d922048e4765aaaef1dbbc6d3'
+SELF_SHA='bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a'
+SLOT,END,CSTART=0x4800,0x7ff0,0x4b00
+
+def sha(b): return hashlib.sha256(b).hexdigest()
+def phdrs(b):
+    p=struct.unpack_from('>Q',b,32)[0]
+    return [struct.unpack_from('>IIQQQQQQ',b,p+56*i) for i in range(struct.unpack_from('>H',b,56)[0])]
+def vaoff(b,a):
+    return next(p[2]+a-p[3] for p in phdrs(b) if p[0]==1 and p[3]<=a<p[3]+p[5])
+def run(args):
+    p=subprocess.run([str(x) for x in args],cwd=HERE,capture_output=True,text=True)
+    with (OUT/'build.log').open('a',encoding='utf-8') as f:
+        f.write(subprocess.list2cmdline([str(x) for x in args])+'\n'+p.stdout+p.stderr)
+    assert p.returncode==0,p.stdout+p.stderr
+def asm(source,pc):
+    a=runpy.run_path(str(TEMPLATE/'ppcasm.py'))['Assembler'](pc)
+    a.asm(source); return a.finish()
+def trampoline(pc,target,toc):
+    text=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nstd r2,120(r1)\n'
+          f'lis r2,{(toc+0x8000)>>16}\naddi r2,r2,{((toc+0x8000)&65535)-32768}\n'
+          f'lis r12,{(target+0x8000)>>16}\naddi r12,r12,{((target+0x8000)&65535)-32768}\n'
+          f'bl {target}\nnop\nld r2,120(r1)\naddi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
+    b,rows=asm(text,pc); assert len(b)<=64
+    return b,rows
+
+def build():
+    # Read-only templates; no import of their build/validator scripts.
+    assert 'local_only/' in (ROOT/'.gitignore').read_text(), 'private outputs must be ignored'
+    stock=(ROOT/'local_only/stock.elf').read_bytes()
+    template=(ROOT/'local_only/stock_ps2_netemu.self').read_bytes()
+    assert sha(stock)==ELF_SHA and sha(template)==SELF_SHA
+    assert stock[vaoff(stock,0xbc168):vaoff(stock,0xbc168)+4].hex()=='f821fec1'
+    assert stock[vaoff(stock,0x11243c):vaoff(stock,0x11243c)+4].hex()=='48009581'
+    assert not any(stock[vaoff(stock,SLOT):vaoff(stock,SLOT)+END-SLOT])
+    assert not any(stock[vaoff(stock,0x930f20):vaoff(stock,0x930f20)+96])
+    OUT.mkdir(parents=True,exist_ok=True)
+    (OUT/'tmp').mkdir(exist_ok=True)
+    for key in ('TMP','TEMP','TMPDIR'): os.environ[key]=str(OUT/'tmp')
+    os.environ['PYTHONDONTWRITEBYTECODE']='1'
+    context=runpy.run_path(str(HERE/'context_proof.py'))['prove']()
+    assert context['status']=='PASS_STATIC_CONTEXT_PATTERN'
+    flags=['--target=powerpc64-unknown-linux-gnu','-mcpu=970','-mbig-endian',
+           '-mabi=elfv2','-mno-altivec','-mno-vsx','-msoft-float','-ffreestanding',
+           '-fno-builtin','-fno-stack-protector','-fno-pic','-fno-asynchronous-unwind-tables',
+           '-fno-unwind-tables','-Oz','-fno-vectorize','-fno-slp-vectorize',
+           '-Wall','-Wextra','-Werror','-S','-emit-llvm']
+    run([LLVM/'clang.exe',*flags,HERE/'src/snapshot.c','-o',OUT/'payload.ll'])
+    ll=(OUT/'payload.ll').read_text().replace(', target_mem: none','')
+    (OUT/'payload.ll').write_text(ll)
+    auditors=runpy.run_path(str(HERE/'audit.py'))
+    ir=auditors['audit_ir'](OUT/'payload.ll')
+    import llvmlite.binding as llvm
+    llvm.set_option('snapshot','-disable-ppc-ctrloops')
+    llvm.initialize_all_targets(); llvm.initialize_all_asmprinters()
+    m=llvm.parse_assembly(ll); m.verify()
+    tm=llvm.Target.from_triple(m.triple).create_target_machine(cpu='970',features='-altivec,-vsx',reloc='static',codemodel='small',abiname='elfv2')
+    obj=tm.emit_object(m)
+    assert struct.unpack_from('>I',obj,48)[0]==2
+    (OUT/'payload.o').write_bytes(obj)
+    (OUT/'payload_compiler.s').write_text(tm.emit_assembly(m))
+    linker='''OUTPUT_FORMAT(elf64-powerpc)
+ENTRY(snapshot_refresh)
+SECTIONS {
+ . = 0x4b00;
+ .text : { *(.text .text.*) }
+ .rodata : { *(.rodata .rodata.*) }
+ . = ALIGN(8);
+ .toc : { *(.toc .toc.*) }
+ .data : { *(.data .data.*) }
+ .bss : { *(.bss .bss.*) *(COMMON) }
+ /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
+}
+native_refresh = 0x4840;
+native_clock = 0x4880;
+native_shutdown = 0x4900;
+stock_ufs_open = 0x4940;
+stock_ufs_stat = 0x4980;
+stock_raw_write = 0x49c0;
+stock_ufs_close = 0x4a00;
+'''
+    (OUT/'link.ld').write_text(linker)
+    run([LLVM/'ld.lld.exe','-m','elf64ppc','-T',OUT/'link.ld','--no-undefined',
+         '--Map='+str(OUT/'payload.map'),OUT/'payload.o','-o',OUT/'payload.elf'])
+    from elftools.elf.elffile import ELFFile
+    with (OUT/'payload.elf').open('rb') as f:
+        pe=ELFFile(f)
+        syms={s.name:s['st_value'] for s in pe.get_section_by_name('.symtab').iter_symbols()}
+        for name in ('.data','.bss','.sdata','.sbss','.opd'):
+            sec=pe.get_section_by_name(name); assert sec is None or sec['sh_size']==0,name
+        assert all(CSTART<=s['sh_addr']<s['sh_addr']+s['sh_size']<=END for s in pe.iter_sections() if s['sh_flags']&2 and s['sh_size'])
+    run([LLVM/'llvm-objcopy.exe','-O','binary',OUT/'payload.elf',OUT/'payload.bin'])
+    code=bytearray(CSTART-SLOT)+(OUT/'payload.bin').read_bytes()
+    entries=[('entry_refresh',0x4800,syms['snapshot_refresh'],syms['.TOC.']),
+             ('native_refresh',0x4840,0x4ac0,0x751280),('native_clock',0x4880,0xb9cd0,0x751280),
+             ('entry_shutdown',0x48c0,syms['snapshot_shutdown'],syms['.TOC.']),
+             ('native_shutdown',0x4900,0x11b9bc,0x751280),
+             ('stock_ufs_open',0x4940,0x1ecc5c,0x751280),('stock_ufs_stat',0x4980,0x1ec760,0x751280),
+             ('stock_raw_write',0x49c0,0x1ed458,0x751280),('stock_ufs_close',0x4a00,0x1ecb10,0x751280)]
+    listing=[]
+    for name,pc,target,toc in entries:
+        block,rows=trampoline(pc,target,toc)
+        code[pc-SLOT:pc-SLOT+len(block)]=block
+        listing.extend(rows); syms[name]=pc
+    reloc,rows=asm('stdu r1,-320(r1)\nb 0xbc16c\n',0x4ac0)
+    assert reloc[:4]==bytes.fromhex('f821fec1')
+    code[0x2c0:0x2c8]=reloc; listing.extend(rows)
+    aa=auditors['audit_assembly'](OUT/'payload_compiler.s',listing)
+    # Own stack frames/trampolines are small compared with the traced 256KiB
+    # control stack. Native helper depth/liveness retain their stock behavior.
+    assert sum(aa['frames'].values())+3*128+320<8192
+    final=bytearray(stock); off=vaoff(stock,SLOT)
+    final[off:off+len(code)]=code
+    hooks={0xbc168:'b 0x4800',0x11243c:'bl 0x48c0'}
+    for pc,source in hooks.items():
+        patch,_=asm(source,pc); assert len(patch)==4
+        final[vaoff(stock,pc):vaoff(stock,pc)+4]=patch
+    assert len(final)==len(stock) and phdrs(final)==phdrs(stock)
+    ranges=[(off,off+len(code))]+[(vaoff(stock,a),vaoff(stock,a)+4) for a in hooks]
+    assert all(a==b or any(lo<=i<hi for lo,hi in ranges) for i,(a,b) in enumerate(zip(stock,final)))
+    (OUT/'trampolines.json').write_text(json.dumps(listing,indent=2)+'\n')
+    elf=OUT/'ps2_netemu_snapshot.elf'; self_path=OUT/'ps2_netemu_snapshot.self'
+    elf.write_bytes(final)
+    runpy.run_path(str(TEMPLATE/'resign_self_installed.py'))['main'](elf,self_path)
+    assert self_path.with_suffix('.roundtrip.elf').read_bytes()==final
+    review=dict(status='BUILT_OFFLINE_PARENT_VALIDATION_REQUIRED',stock_elf_sha256=ELF_SHA,stock_self_sha256=SELF_SHA,
+        elf_sha256=sha(final),self_sha256=sha(self_path.read_bytes()),code_bytes=len(code),code_end=hex(SLOT+len(code)),
+        source_sha256=sha((HERE/'src/snapshot.c').read_bytes()),symbols=syms,frames=aa['frames'],
+        context_proof_sha256=sha((OUT/'context_proof.json').read_bytes()),ir_audit=ir['status'],assembly_audit=aa['status'],
+        only_slot_and_two_hooks_changed=True,segment_headers_unchanged=True,decrypt_roundtrip_exact=True,
+        ppc_validation='NOT RUN: sole JVM owned by mapping investigator',hardware='NOT RUN',
+        risk='Native UFS waits remain unbounded. Neither watchdog recovery nor durable snapshot delivery is proven.')
+    (OUT/'build_review.json').write_text(json.dumps(review,indent=2)+'\n')
+    print(json.dumps(review,indent=2))
+
+if __name__=='__main__': build()

@@ -1,5 +1,15 @@
 # P8 Build Notes: Disc Sector Read Investigation & Variant T1
 
+> **Evidence review, 2026-11-22:** Several conclusions below are historical
+> hypotheses, not established causes. Upstream Sony-authored Linux `ps3rom.c`
+> explicitly handles optical READ(10) through `lv1_storage_read`; this contradicts
+> the claim that HV 245 is intrinsically unsupported for ROM devices. Also, the
+> saved P8 source sends INQUIRY and READ CAPACITY with protocol 1 (PIO), so their
+> successful data does not by itself prove coherence of protocol-3 sector DMA or
+> rule out stale cache. Exact runtime page attributes and DMA behavior still need
+> evidence. See [the primary Linux driver](https://github.com/torvalds/linux/blob/master/drivers/scsi/ps3rom.c),
+> `experiments/netemu_p8/src/probe.c`, and the later P16 console results.
+
 ## Status
 - **Date**: 2026-11-01
 - **Task**: P8 - Investigation of `lv1_storage_read` no-data phenomenon on PS2 DVD, static analysis of softemu/gxemu/LV1 optical read path, and building Variant T1.

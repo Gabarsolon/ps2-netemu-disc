@@ -1,6 +1,6 @@
 import runpy
 
-a = runpy.run_path('netemu_p1d/ppcasm.py')
+a = runpy.run_path('experiments/netemu_p1d/ppcasm.py')
 asm = a['Assembler'](0x4800)
 source = """
 stdu r1, -64(r1)

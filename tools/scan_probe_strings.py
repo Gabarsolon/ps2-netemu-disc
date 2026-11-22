@@ -1,6 +1,6 @@
 import re
 
-code = open('netemu_p2e/src/probe.c', 'r', encoding='utf-8').read()
+code = open('experiments/netemu_p2e/src/probe.c', 'r', encoding='utf-8').read()
 strings = re.findall(r'"([^"]*)"', code)
 matches = 0
 for s in strings:

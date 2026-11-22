@@ -1,0 +1,48 @@
+{
+  "current": {
+    "elf_sha256": "3cdffe9579e029a9b5098f6e05a6b547d243005ea94bb3e49e41263912c4004c",
+    "cases": {
+      "virtual_error": {
+        "result": 18446744073709551615,
+        "steps": 70
+      },
+      "eof": {
+        "result": 0,
+        "steps": 74
+      },
+      "short": {
+        "result": 13,
+        "steps": 195
+      },
+      "native_error": {
+        "result": 2048,
+        "steps": 78
+      },
+      "unexpected_caller_preserves_r30": true
+    },
+    "scope": "Read return/ABI only; optical sector delivery is a modeled boundary"
+  },
+  "baseline": {
+    "elf_sha256": "98f0b19eb01812c393e9109aa2ee068ddd5d00f69404866976a4241ef1882576",
+    "cases": {
+      "virtual_error": {
+        "result": 2048,
+        "steps": 62
+      },
+      "eof": {
+        "result": 2048,
+        "steps": 66
+      },
+      "short": {
+        "result": 2048,
+        "steps": 187
+      },
+      "native_error": {
+        "result": 2048,
+        "steps": 74
+      },
+      "unexpected_caller_preserves_r30": true
+    },
+    "scope": "Read return/ABI only; optical sector delivery is a modeled boundary"
+  }
+}

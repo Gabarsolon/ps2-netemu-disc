@@ -1,5 +1,11 @@
 # P8 T1 control result (console, 2026-11-01): PS3 game disc, same behaviour
 
+> **2026-11-22 evidence review:** the unchanged A5 buffer observations below
+> remain PROVEN. They do not rule out general disc authentication, CPU
+> visibility, or mapping errors. Small PIO metadata is not a proof that a
+> full sector transfer reached the CPU alias. The historical conclusion
+> naming DMA/setup as the cause is INFERRED, not established.
+
 Same build (`ps2_netemu_p8_T1.self`) run with the PS3 BD game disc (GTA IV) inserted instead of the PS2 DVD; log read over FTP (`local_only/netemu_log_T1_bd.bin`).
 
 PROVEN (console):

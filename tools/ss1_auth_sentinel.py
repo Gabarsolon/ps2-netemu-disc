@@ -15,13 +15,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from patch_cobra_netemu_disc import extract_bytes
 
 HOST = '192.168.0.169'
-ADDRESS = 0x714638
-STOCK = bytes.fromhex('f821ff517c0802a6')
-SENTINEL = bytes.fromhex('3860005a4e800020')  # li r3,0x5a; blr (before prologue)
-FOLLOWING = bytes.fromhex('fba10098fbc100a0')
 TARGETS = {
-    'ps2': (ADDRESS, STOCK, FOLLOWING),
-    'gameos': (0x7147e8, bytes.fromhex('f821ff617c0802a6'), bytes.fromhex('fb8100807c7c1b78')),
+    'ps2': (0x714638, bytes.fromhex('f821ff517c0802a6fba10098fbc100a0'), bytes.fromhex('3860005a4e800020fba10098fbc100a0')),
+    'gameos': (0x7147e8, bytes.fromhex('f821ff617c0802a6fb8100807c7c1b78'), bytes.fromhex('3860005a4e800020fb8100807c7c1b78')),
+    'executor': (0x712724, bytes.fromhex('f821ff717c0802a6fba100787c7d1b78'), bytes.fromhex('3800005a90030018386000014e800020')),
+    'auth_ok': (0x712724, bytes.fromhex('f821ff717c0802a6fba100787c7d1b78'), bytes.fromhex('3800000090030018386000014e800020')),
 }
 
 
@@ -31,28 +29,28 @@ def request(path):
 
 
 def check(target='ps2'):
-    address, stock, following = TARGETS[target]
+    address, stock, sentinel = TARGETS[target]
     value = extract_bytes(request(f'/peek.lv1?{address:x}'), address, 16)
     if value is None:
         return 'UNKNOWN'
     raw = bytes.fromhex(value)
-    if raw == stock + following:
+    if raw == stock:
         return 'STOCK'
-    if raw == SENTINEL + following:
+    if raw == sentinel:
         return 'SENTINEL'
     return 'UNKNOWN'
 
 
 def set_state(wanted, target='ps2'):
-    address, stock, _ = TARGETS[target]
+    address, stock, sentinel = TARGETS[target]
     state = check(target)
     if state == wanted:
         print('Already ' + wanted + '; no write.')
         return True
     if state not in ('STOCK', 'SENTINEL'):
-        print('Unknown helper bytes; refusing to write.')
+        print('Unknown bytes; refusing to write.')
         return False
-    value = SENTINEL if wanted == 'SENTINEL' else stock
+    value = sentinel if wanted == 'SENTINEL' else stock
     request(f'/poke.lv1?{address:x}={value.hex()}')
     state = check(target)
     print('Read-back state:', state)

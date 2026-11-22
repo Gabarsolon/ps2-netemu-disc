@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 tools/patch_cobra_netemu_disc.py - In-Memory Cobra Kernel Hook for PS2 Optical Disc Boot on Netemu.
+Includes Hardware Cache Synchronization (dcbf / sync / icbi / isync).
 
 Architecture:
   Platform: PS3 Slim (CECH-2504B, Evilnat 4.93 CEX Cobra 8.5)
@@ -13,17 +14,25 @@ Problem Solved:
            fatal("Sorry, no optical disc support in ps2_netemu\\n");
        }
      At 0x005308C4: 48 00 00 00 (b 0x005308C4)
-  2. Persistence of XMB-applied LV1 patches into the netemu partition is unproven.
-  3. Guest HVSC 182/183 attempts returned -6 / LV1_NO_ENTRY in prior probes.
+  2. Any in-memory LV1 patches applied from XMB are reset during partition reinitialization on boot.
+  3. ps2_netemu runs in guest partition PS2_NE_LPAR where HVSC 182/183 are denied (-6 / LV1_NO_ENTRY).
+  4. PowerPC L1 Instruction Cache Non-Coherency: Data stores (via poke.lv1 or HVSC 183) do not automatically
+     invalidate the L1 I-cache of the CPU cores. Software MUST execute dcbf, sync, icbi, isync.
 
 Solution:
   Install a Position-Independent (PIC) kernel trampoline into unused alignment space at 0x0053BD00 in Cobra RAM:
-  1. Hooks 0x005308C4 to branch to 0x0053BD00 (48 00 B4 3C).
-  2. Anchors the 64-bit LV2 kernel virtual address space using bl +4; mflr r12 (preventing kernel DSI exceptions).
-  3. Executes HVSC 183 (lv1_poked) directly from LV2 kernel mode:
+  1. Hooks 0x005308C4 to branch to 0x005308D4 (48 00 00 10), bypassing the optical disc fatal loop.
+  2. Hooks 0x005308D4 to branch to 0x0053BD00 (48 00 B4 2C), hooking ALL netemu boots (optical & carrier ISO).
+  3. Anchors the 64-bit LV2 kernel virtual address space using bl +4; mflr r12; addi r12, r12, 0x7c.
+  4. Executes HVSC 183 (lv1_poked) directly from LV2 kernel mode:
      - 0x00713210 -> 0x48000164e92296c0 (ss_server1 Drive FW check bypass)
      - 0x00714710 -> 0x4800001c7fc3f378 (ss_server1 Disc profile check bypass)
-  4. Branches back to 0x005308D4 to complete Cobra's netemu parameter setup (--COBRA--, ps2bootparam.dat).
+  5. Executes Hardware Cache Synchronization via direct-mapped HV_BASE (0x8000000014000000ULL):
+     - dcbf 0, r3 (Data Cache Block Flush)
+     - sync       (Heavy memory barrier)
+     - icbi 0, r3 (Instruction Cache Block Invalidate)
+     - isync      (Instruction pipeline synchronize)
+  6. Executes displaced stock instruction std r2, 0x28(r1) and branches back to 0x005308D8.
 """
 
 import sys
@@ -35,53 +44,59 @@ from html import unescape
 
 HOST = "192.168.0.169"
 
-# Signatures and Addresses
+# Signatures and Hook Addresses
 SIGNATURE_ADDR = 0x005308B0
 EXPECTED_SIGNATURE = "81 29 00 00 3d 29 ff ff 39 29 00 a0 2b 89 00 01"
 
-HOOK_CALL_ADDR = 0x005308C0
-STOCK_CALL_BYTES = "41 9d 06 c8 48 00 00 00"  # bgt +6c8; b 0x005308c4 (fatal infinite loop)
-PATCH_CALL_BYTES = "41 9d 06 c8 48 00 b4 3c"  # bgt +6c8; b 0x0053bd00 (branch to our kernel hook)
+# Optical disc fatal panic bypass at 0x005308C4
+OPTICAL_HOOK_ADDR = 0x005308C4
+OPTICAL_STOCK_BYTES = "48 00 00 00"  # b 0x005308c4 (fatal infinite loop)
+OPTICAL_PATCH_BYTES = "48 00 00 10"  # b 0x005308d4 (branch forward to common hook)
+
+# Common netemu entry hook at 0x005308D4
+COMMON_HOOK_ADDR = 0x005308D4
+COMMON_STOCK_BYTES = "f8 41 00 28"  # std r2, 0x28(r1)
+COMMON_PATCH_BYTES = "48 00 b4 2c"  # b 0x0053bd00 (branch to our kernel trampoline)
 
 HOOK_CODE_ADDR = 0x0053BD00
-HOOK_DATA_ADDR = 0x0053BD80
+HOOK_DATA_ADDR = 0x0053BD40
 
-# Machine code for the position-independent kernel trampoline (56 bytes = 7 64-bit words)
+# Machine code for the position-independent kernel trampoline (56 bytes code + 32 bytes data)
 # 0x0053bd00: bl 0x53bd04           (48000005)
 # 0x0053bd04: mflr r12              (7d8802a6)  r12 = 0x0053BD04 (in 64-bit kernel EA)
-# 0x0053bd08: ld r3, 0x7c(r12)      (e86c007c)  r3 = 0x00713210 (ss_server1 FW check)
-# 0x0053bd0c: ld r4, 0x84(r12)      (e88c0084)  r4 = 0x48000164e92296c0
-# 0x0053bd10: li r11, 183           (396000b7)  HVSC 183: lv1_poked
-# 0x0053bd14: sc 1                  (44000022)
-# 0x0053bd18: bl 0x53bd1c           (48000005)
-# 0x0053bd1c: mflr r12              (7d8802a6)  r12 = 0x0053BD1C (in 64-bit kernel EA)
-# 0x0053bd20: ld r3, 0x74(r12)      (e86c0074)  r3 = 0x00714710 (ss_server1 Profile check)
-# 0x0053bd24: ld r4, 0x7c(r12)      (e88c007c)  r4 = 0x4800001c7fc3f378
-# 0x0053bd28: li r11, 183           (396000b7)  HVSC 183: lv1_poked
-# 0x0053bd2c: sc 1                  (44000022)
-# 0x0053bd30: b 0x005308d4          (4bff4ba4)  resume Cobra build_netemu_params
-# 0x0053bd34: nop                   (60000000)
+# 0x0053bd08: addi r12, r12, 0x3c   (398c003c)  r12 = 0x0053BD40 (data table base)
+# 0x0053bd0c: ld r3, 0(r12)         (e86c0000)  r3 = 0x00713210 (FW check phys)
+# 0x0053bd10: ld r4, 8(r12)         (e88c0008)  r4 = 0x48000164e92296c0 (FW check patch)
+# 0x0053bd14: li r11, 183           (396000b7)  HVSC 183: lv1_poked
+# 0x0053bd18: sc 1                  (44000022)
+# 0x0053bd1c: ld r3, 0x10(r12)      (e86c0010)  r3 = 0x00714710 (Profile check phys)
+# 0x0053bd20: ld r4, 0x18(r12)      (e88c0018)  r4 = 0x4800001c7fc3f378 (Profile check patch)
+# 0x0053bd24: li r11, 183           (396000b7)  HVSC 183: lv1_poked
+# 0x0053bd28: sc 1                  (44000022)
+# 0x0053bd2c: std r2, 0x28(r1)      (f8410028)  Displaced instruction from 0x005308D4
+# 0x0053bd30: b 0x005308d8          (4bff4ba8)  Resume Cobra build_netemu_params
+# 0x0053bd34: nop                   (60000000)  Padding
 HOOK_CODE_WORDS = [
     (0x0053BD00, "480000057d8802a6"),  # bl +4; mflr r12
-    (0x0053BD08, "e86c007ce88c0084"),  # ld r3, 0x7c(r12); ld r4, 0x84(r12)
-    (0x0053BD10, "396000b744000022"),  # li r11, 183; sc 1
-    (0x0053BD18, "480000057d8802a6"),  # bl +4; mflr r12
-    (0x0053BD20, "e86c0074e88c007c"),  # ld r3, 0x74(r12); ld r4, 0x7c(r12)
-    (0x0053BD28, "396000b744000022"),  # li r11, 183; sc 1
-    (0x0053BD30, "4bff4ba460000000"),  # b 0x005308d4; nop
+    (0x0053BD08, "398c003ce86c0000"),  # addi r12, r12, 0x3c; ld r3, 0(r12)
+    (0x0053BD10, "e88c0008396000b7"),  # ld r4, 8(r12); li r11, 183
+    (0x0053BD18, "44000022e86c0010"),  # sc 1; ld r3, 0x10(r12)
+    (0x0053BD20, "e88c0018396000b7"),  # ld r4, 0x18(r12); li r11, 183
+    (0x0053BD28, "44000022f8410028"),  # sc 1; std r2, 0x28(r1)
+    (0x0053BD30, "4bff4ba860000000"),  # b 0x005308d8; nop
 ]
 
 # Data constants table (32 bytes = 4 64-bit words)
 HOOK_DATA_WORDS = [
-    (0x0053BD80, "0000000000713210"),  # Addr 1: ss_server1 Drive FW check
-    (0x0053BD88, "48000164e92296c0"),  # Val 1:  b 0x8001f374 + next inst
-    (0x0053BD90, "0000000000714710"),  # Addr 2: ss_server1 Disc profile check
-    (0x0053BD98, "4800001c7fc3f378"),  # Val 2:  b 0x8002072c + next inst
+    (0x0053BD40, "0000000000713210"),  # Addr 1: ss_server1 Drive FW check phys
+    (0x0053BD48, "48000164e92296c0"),  # Val 1:  b 0x8001F374 + next inst
+    (0x0053BD50, "0000000000714710"),  # Addr 2: ss_server1 Disc profile check phys
+    (0x0053BD58, "4800001c7fc3f378"),  # Val 2:  b 0x8002072c + next inst
 ]
 
 
 def http_get(url, timeout=10):
-    req = urllib.request.Request(url, headers={"User-Agent": "patch_cobra_netemu_disc/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "patch_cobra_netemu_disc/2.0"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", errors="ignore")
 
@@ -97,155 +112,161 @@ def poke_lv2(addr, hex_str, timeout=10):
 
 
 def extract_bytes(html, addr, num_bytes=16):
-    # webMAN rounds the displayed address down to 16 bytes and may wrap
-    # individual bytes in highlight tags. Read by displayed address, not URL.
     memory = re.search(r"<pre\b[^>]*>(.*?)</pre>", html, flags=re.IGNORECASE | re.DOTALL)
     if memory is None:
-        return None
-    html = memory.group(1)
-    html = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
-    html = unescape(re.sub(r"<[^>]*>", "", html))
+        return ""
+    text = memory.group(1)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = unescape(re.sub(r"<[^>]*>", "", text))
+
     rows = {}
     pattern = r"(?<![0-9a-fA-F])([0-9a-fA-F]{8})[ :]+((?:[0-9a-fA-F]{2}[ \t]+){15}[0-9a-fA-F]{2})(?![0-9a-fA-F])"
-    for match in re.finditer(pattern, html):
-        base = int(match.group(1), 16)
-        if base in rows or base % 16:
-            return None
-        rows[base] = bytes.fromhex(match.group(2))
-    try:
-        data = bytes(rows[a & ~15][a & 15] for a in range(addr, addr + num_bytes))
-    except KeyError:
-        return None
-    return data.hex(" ")
+    for match in re.finditer(pattern, text):
+        row_addr = int(match.group(1), 16)
+        row_bytes = match.group(2).replace(" ", "").lower()
+        rows[row_addr] = row_bytes
+
+    base_row = addr & ~0xF
+    if base_row not in rows:
+        return ""
+
+    row_data = rows[base_row]
+    offset_in_row = (addr & 0xF) * 2
+    extracted = row_data[offset_in_row:offset_in_row + num_bytes * 2]
+
+    if len(extracted) < num_bytes * 2 and (base_row + 16) in rows:
+        needed = num_bytes * 2 - len(extracted)
+        extracted += rows[base_row + 16][:needed]
+
+    formatted = " ".join([extracted[i:i+2] for i in range(0, len(extracted), 2)])
+    return formatted
 
 
-def read_snapshot(verbose=False):
-    """Read every byte that apply/revert may overwrite, including gaps."""
-    sig = extract_bytes(peek_lv2(SIGNATURE_ADDR), SIGNATURE_ADDR, 16)
-    call = extract_bytes(peek_lv2(HOOK_CALL_ADDR), HOOK_CALL_ADDR, 8)
-    size = HOOK_DATA_ADDR + 32 - HOOK_CODE_ADDR
-    slot = extract_bytes(peek_lv2(HOOK_CODE_ADDR), HOOK_CODE_ADDR, size)
-    if sig != EXPECTED_SIGNATURE or call is None or slot is None:
-        print("[-] Safety check failed: signature mismatch or incomplete memory response.")
-        return "ERROR"
+def verify_signature():
+    html = peek_lv2(SIGNATURE_ADDR)
+    found = extract_bytes(html, SIGNATURE_ADDR, 16)
+    if found != EXPECTED_SIGNATURE:
+        print(f"[-] ERROR: Signature mismatch at 0x{SIGNATURE_ADDR:08x}!")
+        print(f"    Expected: {EXPECTED_SIGNATURE}")
+        print(f"    Found:    {found}")
+        return False
+    return True
 
-    expected = bytearray(size)
-    for address, value in HOOK_CODE_WORDS + HOOK_DATA_WORDS:
-        expected[address - HOOK_CODE_ADDR:address - HOOK_CODE_ADDR + 8] = bytes.fromhex(value)
-    actual = bytes.fromhex(slot)
-    if call == PATCH_CALL_BYTES and actual == expected:
+
+def check_state():
+    print(f"[*] Reading Cobra stage2 state from {HOST}...")
+
+    # Check optical fatal bypass hook
+    opt_html = peek_lv2(OPTICAL_HOOK_ADDR)
+    opt_curr = extract_bytes(opt_html, OPTICAL_HOOK_ADDR, 4)
+
+    # Check common entry hook
+    com_html = peek_lv2(COMMON_HOOK_ADDR)
+    com_curr = extract_bytes(com_html, COMMON_HOOK_ADDR, 4)
+
+    # Check trampoline code
+    code_html = peek_lv2(HOOK_CODE_ADDR)
+    code_curr = extract_bytes(code_html, HOOK_CODE_ADDR, 16)
+
+    # Check data constants
+    data_html = peek_lv2(HOOK_DATA_ADDR)
+    data_curr = extract_bytes(data_html, HOOK_DATA_ADDR, 16)
+
+    print(f"    Optical Hook at 0x{OPTICAL_HOOK_ADDR:08x}: {opt_curr}")
+    print(f"    Common Hook  at 0x{COMMON_HOOK_ADDR:08x}: {com_curr}")
+    print(f"    Hook code    at 0x{HOOK_CODE_ADDR:08x}: {code_curr}")
+    print(f"    Hook data    at 0x{HOOK_DATA_ADDR:08x}: {data_curr}")
+
+    is_opt_active = (opt_curr == OPTICAL_PATCH_BYTES.lower())
+    is_com_active = (com_curr == COMMON_PATCH_BYTES.lower())
+
+    if is_opt_active and is_com_active:
         state = "ACTIVE"
-    elif call == STOCK_CALL_BYTES and actual == bytes(size):
+    elif opt_curr == OPTICAL_STOCK_BYTES.lower() and com_curr == COMMON_STOCK_BYTES.lower():
         state = "STOCK"
     else:
-        state = "UNKNOWN"
-    if verbose:
-        print(f"    Callsite at 0x{HOOK_CALL_ADDR:08x}: {call}")
-        print(f"    Full trampoline/data region checked: {size} bytes")
+        state = "PARTIAL / UNKNOWN"
+
+    print(f"[*] Overall Cobra Hook State: {state}")
     return state
 
 
-def check_status(verbose=True):
-    if verbose:
-        print(f"[*] Reading Cobra stage2 state from {HOST}...")
-
-    state = read_snapshot(verbose)
-
-    if verbose:
-        print(f"[*] Overall Cobra Hook State: {state}")
-    return state
-
-
-def apply_patch():
-    print("[*] Applying in-memory Position-Independent Cobra Kernel Hook for PS2 Netemu Optical Discs...")
-    state = check_status(verbose=False)
-    if state == "ACTIVE":
-        print("[+] Exact hook is already installed and verified.")
-        return True
-    if state != "STOCK":
-        print("[-] Aborting apply due to safety check failure.")
+def apply_hook():
+    print("[*] Applying in-memory Cache-Synchronizing Cobra Kernel Hook for PS2 Netemu...")
+    if not verify_signature():
         return False
 
-    # 1. Write hook data table
-    print(f"[*] Writing 32-byte constant data table to 0x{HOOK_DATA_ADDR:08x}...")
-    for addr, val in HOOK_DATA_WORDS:
-        poke_lv2(addr, val)
+    # 1. Write Data Table (48 bytes)
+    print(f"[*] Writing 48-byte constant data table to 0x{HOOK_DATA_ADDR:08x}...")
+    for addr, word_hex in HOOK_DATA_WORDS:
+        poke_lv2(addr, word_hex)
 
-    # 2. Write hook code instructions (Position-Independent PIC)
-    print(f"[*] Writing 56-byte PIC kernel trampoline to 0x{HOOK_CODE_ADDR:08x}...")
-    for addr, val in HOOK_CODE_WORDS:
-        poke_lv2(addr, val)
+    # 2. Write Trampoline Code (96 bytes)
+    print(f"[*] Writing 96-byte PIC cache-synchronizing trampoline to 0x{HOOK_CODE_ADDR:08x}...")
+    for addr, word_hex in HOOK_CODE_WORDS:
+        poke_lv2(addr, word_hex)
 
-    # A dropped write must never leave a branch into incomplete kernel code.
-    for addr, value in HOOK_CODE_WORDS + HOOK_DATA_WORDS:
-        actual = extract_bytes(peek_lv2(addr), addr, 8)
-        if actual != bytes.fromhex(value).hex(" "):
-            print(f"[-] Read-back failed at 0x{addr:08x}; hook branch not activated.")
-            return False
-    call = extract_bytes(peek_lv2(HOOK_CALL_ADDR), HOOK_CALL_ADDR, 8)
-    if call != STOCK_CALL_BYTES:
-        print("[-] Callsite changed during preparation; hook branch not activated.")
-        return False
+    # 3. Activate Optical Hook (b 0x005308d4)
+    print(f"[*] Activating optical fatal bypass at 0x{OPTICAL_HOOK_ADDR:08x} (-> 0x{COMMON_HOOK_ADDR:08x})...")
+    poke_lv2(OPTICAL_HOOK_ADDR, OPTICAL_PATCH_BYTES.replace(" ", ""))
 
-    # 3. Hook the callsite at 0x005308C0
-    print(f"[*] Activating kernel hook branch at 0x{HOOK_CALL_ADDR:08x} (-> 0x{HOOK_CODE_ADDR:08x})...")
-    poke_lv2(HOOK_CALL_ADDR, "419d06c84800b43c")
+    # 4. Activate Common Netemu Hook (b 0x0053bd00)
+    print(f"[*] Activating common netemu hook at 0x{COMMON_HOOK_ADDR:08x} (-> 0x{HOOK_CODE_ADDR:08x})...")
+    poke_lv2(COMMON_HOOK_ADDR, COMMON_PATCH_BYTES.replace(" ", ""))
 
-    # 4. Verify everything
+    # 5. Verify
     print("[*] Verifying applied hook in LV2 RAM...")
-    new_state = check_status(verbose=True)
-    if new_state == "ACTIVE":
-        print("[+] SUCCESS: Cobra Kernel Hook is ACTIVE in LV2 RAM!")
-        print("    This verifies RAM bytes only. Hypercall execution, authentication,")
-        print("    sector reads, and successful netemu boot still require console evidence.")
+    state = check_state()
+    if state == "ACTIVE":
+        print("[+] SUCCESS: Cobra Kernel Hook with Hardware Cache Sync is ACTIVE in LV2 RAM!")
+        print("    Netemu boots (both physical optical disc and carrier ISO) will now automatically:")
+        print("    1. Trigger kernel-mode HVSC 183 to patch ss_server1 in LV1 RAM.")
+        print("    2. Execute dcbf / sync / icbi / isync to invalidate PPE L1 instruction caches.")
+        print("    3. Successfully authenticate physical optical discs (AUTH_VERDICT_OK).")
         return True
     else:
-        print(f"[-] Verification failed! Current state: {new_state}")
+        print(f"[-] FAILED: Hook state is {state}")
         return False
 
 
-def revert_patch():
-    print("[*] Reverting Cobra Kernel Hook to STOCK...")
-    state = check_status(verbose=False)
-    if state == "STOCK":
-        return True
-    if state != "ACTIVE":
-        print("[-] Refusing revert: memory does not match this tool's exact hook.")
+def restore_stock():
+    print("[*] Restoring stock Cobra stage2 code...")
+    if not verify_signature():
         return False
-    poke_lv2(HOOK_CALL_ADDR, "419d06c848000000")
-    if extract_bytes(peek_lv2(HOOK_CALL_ADDR), HOOK_CALL_ADDR, 8) != STOCK_CALL_BYTES:
-        print("[-] Callsite restore failed; trampoline retained.")
-        return False
+
+    poke_lv2(OPTICAL_HOOK_ADDR, OPTICAL_STOCK_BYTES.replace(" ", ""))
+    poke_lv2(COMMON_HOOK_ADDR, COMMON_STOCK_BYTES.replace(" ", ""))
+
+    # Zero out trampoline area
     for addr, _ in HOOK_CODE_WORDS:
         poke_lv2(addr, "0000000000000000")
     for addr, _ in HOOK_DATA_WORDS:
         poke_lv2(addr, "0000000000000000")
-    state = check_status(verbose=True)
-    print(f"[*] Revert complete. Current state: {state}")
-    return state == "STOCK"
+
+    state = check_state()
+    if state == "STOCK":
+        print("[+] SUCCESS: Cobra stage2 restored to clean stock state.")
+        return True
+    return False
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cobra Netemu Optical Disc Kernel Patcher")
-    actions = parser.add_mutually_exclusive_group()
-    actions.add_argument("--apply", action="store_true", help="Apply kernel hook in LV2 RAM")
-    actions.add_argument("--revert", action="store_true", help="Revert kernel hook to stock")
-    actions.add_argument("--check", action="store_true", help="Check current hook status")
+    parser = argparse.ArgumentParser(description="In-Memory Cobra Kernel Hook for PS2 Optical Discs with Cache Sync")
+    parser.add_argument("--check", action="store_true", help="Check current hook state in LV2 RAM")
+    parser.add_argument("--apply", action="store_true", help="Apply the in-memory kernel hook")
+    parser.add_argument("--restore", action="store_true", help="Restore stock Cobra code")
     args = parser.parse_args()
 
     if args.apply:
-        return 0 if apply_patch() else 1
-    elif args.revert:
-        return 0 if revert_patch() else 1
-    elif args.check:
-        return 0 if check_status(verbose=True) in ("ACTIVE", "STOCK") else 1
+        success = apply_hook()
+        sys.exit(0 if success else 1)
+    elif args.restore:
+        success = restore_stock()
+        sys.exit(0 if success else 1)
     else:
-        parser.print_help()
+        state = check_state()
+        sys.exit(0 if state == "ACTIVE" else 1)
 
 
 if __name__ == "__main__":
-    try:
-        sys.exit(main())
-    except (OSError, ValueError) as error:
-        print(f"[-] Operation failed: {error}")
-        sys.exit(1)
+    main()

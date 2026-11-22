@@ -1,5 +1,12 @@
 # P9 U1 result (console, 2026-11-01, Test Drive Unlimited PS2 DVD inserted)
 
+> **2026-11-22 evidence review:** unchanged A5 is preserved prefill, not
+> returned zero data or scrambled sectors. PIO sector failure does not
+> rule out mapping/visibility errors, and the authentication explanation
+> below remains INFERRED. P16 authentication returned 0x16; physical
+> sector delivery and its root cause remain UNKNOWN. The exact 4.93
+> parser now confirms that the existing 64-byte command is accepted.
+
 Log read over FTP and decoded (`local_only/netemu_log_U1_ps2.bin`, clean shutdown, `finish: ps2_netemu_p9_u1 clean success`).
 
 PROVEN (console):

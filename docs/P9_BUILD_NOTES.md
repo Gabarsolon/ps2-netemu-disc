@@ -1,5 +1,13 @@
 # P9 Build Notes: Optical Drive DMA Transfer Investigation & Variant U1
 
+> **2026-11-22 evidence review:** retain the measured rc/status/prefill
+> results, but treat the diagnosis and candidate mechanisms below as
+> historical hypotheses. A PS3-disc control does not rule out general
+> authentication. Missing data does not establish a DMA/cache/IRQ defect.
+> Exact 4.93 ROM vtable/parser tracing supersedes the guessed common
+> handler addresses here. The post-176 register is not a returned bus
+> address; call 174 supplies the allocated bus base.
+
 ## Status
 - **Date**: 2026-11-01
 - **Task**: P9 - Optical Drive Data Transfer Analysis (DMA vs PIO), stock netemu HDD driver setup comparison, and Variant U1 implementation.

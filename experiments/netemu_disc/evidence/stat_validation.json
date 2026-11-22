@@ -1,0 +1,13 @@
+{
+  "current": {
+    "elf_sha256": "3cdffe9579e029a9b5098f6e05a6b547d243005ea94bb3e49e41263912c4004c",
+    "caller_fence_preserved": true,
+    "cases_passed": 4,
+    "scope": "Stat hook only; optical backend remains unvalidated"
+  },
+  "baseline": {
+    "elf_sha256": "924906ae212dc93afd6b303cdaa353f4cb7fc170d27b44c6b8e15678ede6b9d5",
+    "caller_fence_preserved": false,
+    "bytes_after_buffer": "000000000000000000000000000000007e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e"
+  }
+}

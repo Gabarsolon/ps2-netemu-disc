@@ -1,5 +1,43 @@
 # P16 L1 console results (2026-11-09)
 
+## Offline backend follow-up (2026-11-22)
+
+**PROVEN (PC, separate unfinished `experiments/netemu_disc` prototype):** its
+stat implementation cleared 64 bytes into a native 48-byte caller buffer. The
+old executable overwrote the 16-byte following fence, including the saved-r28
+area. The corrected executable preserves the fence, reports the intended mode
+and size, rejects null/below-range pointers, and preserves native stat delegation.
+Evidence: `experiments/netemu_disc/evidence/stat_validation.json`.
+
+**PROVEN (PC):** Cobra's epilogue at `0x3D04` replaced the prototype's virtual
+read result with the requested count. A dedicated entry shim now carries the
+actual count only for virtual fd `0xBD00` at the exact `0x3CFC` call site.
+Compiled PPC execution through the real hook and stock epilogue returns -1, 0,
+and 13 for modeled virtual error, EOF, and a 13-byte short read. The preceding
+executable returned 2048 in all three cases. Native-fd behavior, TOC, stack and
+saved registers remain unchanged; an unexpected caller preserves r30. The
+sector-provider boundary is modeled, so these are not physical-drive results.
+Evidence: `experiments/netemu_disc/evidence/read_return_validation.json`.
+
+**PROVEN (PC):** the latest SELF rebuild decrypts to the patched ELF byte for
+byte. **UNKNOWN:** full backend safety and actual sector delivery; this prototype
+has not been installed during this follow-up. The historical P16 measurements
+below remain the trusted physical-read evidence.
+
+**PROVEN (PC):** the exact 4.93 ROM parser accepts the existing 64-byte ATAPI
+command, copies those 64 bytes, and does not read Linux's trailing `arglen`.
+Five parser cases and three lower packet-builder cases passed with hardware
+boundaries modeled. The outer destination LPAR controls the data target.
+This rules out the missing trailing field as a format defect in that path;
+live data delivery remains UNKNOWN. Private report: `local_only/atapi_parser_review.md`.
+The subsequent mapping review also corrected a telemetry error: the allocated
+bus base comes from call 174, not the post-176 return register.
+
+**PROVEN (console, separate control):** one healthy Buzz carrier returned to
+XMB without controller input; stock was restored and verified afterward.
+See [AUTOMATIC_RETURN_CONTROL.md](AUTOMATIC_RETURN_CONTROL.md). No optical
+command was added by that control, and it does not prove a disc read.
+
 ## Result
 
 **PROVEN:** the new logger saved a complete fresh diagnostic summary and END
