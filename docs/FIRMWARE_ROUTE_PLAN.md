@@ -107,3 +107,37 @@ If it still powers off with C present, suspect B's power-on path and revisit.
 Also PROVEN this session: plug off/on does NOT auto-boot (powerOnReset=0, and
 enabling it is unproven on this Slim); recovery needs a >=30s AC discharge then a
 manual power-button press (or BT wake, which is unreliable after an abrupt cut).
+
+## ROOT CAUSE of the probe power-offs (2026-11-22, offline analysis)
+
+The open-probe powered off the console even with bus=99 (which per P0I returns
+-17 WITHOUT touching hardware). So the power-off is NOT the optical device, the
+bridge power (B), or the IRQ (Component C) -- it is the **hypercall itself**.
+
+Evidence from stock.elf + P0D:
+- All 20 `sc 1` sites in the netemu are **panic stubs** (`li r11,255; sc1` =
+  lv1_panic; r3 = panic code). The netemu makes NO raw device `sc 1` in its code.
+- P0D: the netemu reaches LV1 through a guest->HV **forwarding bridge** (163
+  sites, r11=0x80000000|n), not bare `sc 1`. The PHAT emus call LV1 directly but
+  **wrap the `sc 1` in an LPAR-state switch**: `bl 0x2f38` (switch/disable LPAR
+  state) -> `sc 1` -> `mtmsrd r28` (restore) (P0D optical-read path).
+- Our probe did a **bare `li r11,170; sc 1`** with no state switch. A device
+  hypercall issued from the wrong LPAR/MSR state faults -> guest exception ->
+  a `li r11,255; sc1` panic stub -> lv1_panic -> Syscon power-off. This fires
+  regardless of the bus/dev args, matching the bus=99 power-off.
+
+**Correction:** Component A/B and C were not the blocker for the OPEN. The real
+requirement is to issue the LV1 call the way the netemu/PHAT code does: with the
+correct LPAR-state-switch wrapper (and likely the netemu's forwarding path), not
+a bare `sc 1`. A bare injected hypercall at owned_startup is mis-issued.
+
+**Next (offline, before any more console tests):** reverse-engineer the netemu's
+own LV1-call wrapper (its equivalent of PHAT `bl 0x2f38 ... sc1 ... mtmsrd`), or
+reuse an existing netemu hypercall trampoline, and call lv1_open_device/
+lv1_storage_read THROUGH it. Do NOT fire more bare-`sc 1` probes: each one
+panics and powers the console off, and plug recovery is unreliable.
+
+## Recovery reliability note
+The Tapo P115 plug (192.168.0.12) becomes unreachable after a console power-off
+(repeated connect timeouts), so autonomous plug-cycle recovery is unreliable.
+A >=30s plug-off discharge + manual power button (owner) is the reliable path.
