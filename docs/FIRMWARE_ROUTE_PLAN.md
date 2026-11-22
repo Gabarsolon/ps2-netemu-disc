@@ -141,3 +141,28 @@ panics and powers the console off, and plug recovery is unreliable.
 The Tapo P115 plug (192.168.0.12) becomes unreachable after a console power-off
 (repeated connect timeouts), so autonomous plug-cycle recovery is unreliable.
 A >=30s plug-off discharge + manual power button (owner) is the reliable path.
+
+## CORRECTION to the root-cause note (same day)
+
+The previous "root cause = bare sc 1 is wrong" was OVERSTATED. Re-check of the A
+(ability bit) state per probe:
+- probeAB2 (bus 4, **A+B verified active**): power-off -> consistent with the
+  real OPTICAL DEVICE CLAIM being fatal (Component C / IRQ still the candidate).
+- probe 3 (bus 99, **NO A applied**): power-off -> equally consistent with "the
+  LPAR is not authorized for HV 170 without A, so any HV-170 call panics",
+  NOT necessarily a wrong sc 1 mechanism.
+
+So two live hypotheses remain, not settled:
+1. A grants HV-170 authorization; with A the bare sc 1 works and the real
+   open(4,2,0) fatality is the device claim -> Component C (optical IRQ) is next.
+2. The netemu needs a PHAT-style LPAR-state-switch wrapper around device sc 1
+   (bl 0x2f38 ... sc1 ... mtmsrd) and/or its forwarding path; bare sc 1 is wrong.
+
+**DECISIVE NEXT TEST (safe): bus-99 probe WITH A applied.**
+- Survives + snapshot open_ret = -17 (0x1ffffffef) => hypothesis 1: bare sc 1 is
+  fine once A authorizes; move to Component C for the real device claim.
+- Still powers off => hypothesis 2: the sc 1 mechanism/wrapper is the problem;
+  RE the netemu's LV1-call wrapper before any device work.
+Run this bus-99+A probe (no bridge/B needed, no device touched) once the console
+is recoverable; it is the cheapest discriminator and should not power off under
+hypothesis 1.
