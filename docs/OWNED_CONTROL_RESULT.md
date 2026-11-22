@@ -1,6 +1,41 @@
-# Owned-memory control — offline validation result, 2026-11-22
+# Owned-memory control — result, 2026-11-22
 
-**PROVEN offline only. NOT console-tested. Disc boot still UNKNOWN.**
+**PROVEN ON CONSOLE (2026-11-22 19:28Z): `status: owned`, clean XMB return at 73s,
+no freeze, durable snapshot written.** Disc boot still UNKNOWN (no optical read here).
+
+## Console run (controller-free Buzz carrier)
+
+- Launched `play.ps3 /dev_hdd0/PS2ISO/Buzz…iso`; offline (PS2 mode) at 24s,
+  returned to XMB at 73s (matches the ~72s auto-return baseline). No plug action.
+- Installed SELF `7bd27754257d59537404ae4a282ed1685aede9c6a9cb38196d157e8959ea194a`;
+  stock `bad3e45c…` backed up, then restored + read-back verified after the run.
+- Snapshot `/dev_hdd0/tmp/netemu_owned_snapshot.bin` (sha
+  `aa66345e1dfe18ae637b6de10bcd4e57acf1eb88a2fb88bdfe14c742e297280a`), `OWNSEC1`,
+  decoded to `local_only/owned_control/decoded_console_snapshot.json`.
+
+**Live owned memory (the data the drive-read step was blocked on):**
+
+| Region | CPU EA | LPAR |
+|---|---|---|
+| owned block A (N=0x2000) | `0x80022440` | `0x3b22440` |
+| command | `0x80023480` | `0x3b23480` |
+| data | `0x80023500` | `0x3b23500` |
+
+Pool P=`0x3b00000`, E=`0x80000000` (confirms `P + (A - E)` live). `pattern_pass:
+true`, `ui_hdd_valid: true`, admission B=3 (headroom 0xff9), startup native
+result `0x80022400`, saved/inside MSR `0x8000000002002030`, SPR088 `0x80c00000`.
+The one real allocator call granted ownership; our own write/read patterns in the
+block verified; the shutdown UFS write completed (fd=2, size 0x10000) — **no
+unbounded-wait freeze on this run.**
+
+Still absent (by design): physical sector read, DMA, cache attribute/visibility,
+hardware execution, UFS deadline / durable-delivery guarantee.
+
+---
+
+## Offline validation (pre-console)
+
+**PROVEN offline. Disc boot still UNKNOWN.**
 
 `experiments/netemu_owned_control/` is the frontier build after the
 controller-free mapping snapshot ([MAPPING_SNAPSHOT_RESULT.md](MAPPING_SNAPSHOT_RESULT.md)).

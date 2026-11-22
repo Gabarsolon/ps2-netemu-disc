@@ -16,14 +16,14 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
-| Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 95% |
+| Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 97% |
 | Level 1: read sector 16 (ISO9660 signature) | 10% | `████░░░░░░` 35% |
 | Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 15.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-22. PROVEN offline (NOT console): owned_control grabs one fresh retained 8 KiB owned block and verifies its CPU-EA/LPAR subranges; 194 PPC cases PASS, store audit bounded, decrypt roundtrip exact. Contains NO optical/DMA/ATAPI - memory-ownership prerequisite only. Risk: unbounded native UFS wait -&gt; console test needs owner present for power-cut recovery. Still UNKNOWN on console: live fresh allocation A, physical TDU sector delivery, disc auth, disc boot. Stock currently installed and verified._
+_Last update: 2026-11-22. CONSOLE-PROVEN 2026-11-22: owned_control got status=owned on hardware - one real allocator call granted a fresh 8192-byte block. Live owned memory: A EA 0x80022440 / LPAR 0x3b22440; command EA 0x80023480 / LPAR 0x3b23480; data EA 0x80023500 / LPAR 0x3b23500; pool P 0x3b00000 E 0x80000000 (P+(A-E) confirmed). pattern_pass true, snapshot UFS write completed, clean XMB return at 73s, no freeze. Stock restored+verified. NEXT: drive-read control (ATAPI into owned data region, matching completion, bounded polling) - needs building+validation before next console run. Physical TDU sector delivery, disc auth, disc boot still UNKNOWN. Direct /play.ps3 physical-disc route needs LV1 ss_server3 + LV2 Cobra live RAM patches (owner OK required)._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
