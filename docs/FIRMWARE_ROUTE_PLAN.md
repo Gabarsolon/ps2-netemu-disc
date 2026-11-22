@@ -83,3 +83,27 @@ Physical base this boot: VA 0x80000000 -> phys 0xFB000 (contiguous here). The to
 locates by signature each run, so per-boot relocation is handled. `--apply` pokes
 A->60000000 and B->480003f4; `--restore` reverts; reboot also clears (RAM only).
 NOT yet applied: waits for the C/D netemu probe so there is something to test.
+
+## CONSOLE RESULT: probe 1 (open-only) POWERED OFF — 2026-11-22 ~20:15
+
+Applied A+B live (A 0x119334->60000000, B 0x118ad8->480003f4, both verified),
+installed firmware_probe1 (sha 468544385d4e19da5fc656bfab5331a99f202f2225a55921dbbe540fab7b65e8),
+launched Buzz carrier. Console powered OFF at ~24s (no XMB return). No snapshot
+written (panic before shutdown path). Recovery: plug off 30s + on restored
+standby (the 5s recover cycle was too short; 30s discharge works), owner pressed
+power. Stock netemu restored + verified (bad3e45c); A+B cleared by the power cycle.
+
+**Interpretation:** A (ability) + B (bridge power) alone do NOT make
+lv1_open_device(4,2,0) survivable. Consistent with hypothesis #2: the optical
+drive asserts IRQ 9/10, the netemu has no handler, so it hits the guest panic
+vector 0xf58 -> lv1_panic(0x11f) -> Syscon power-off. (Cannot yet rule out that
+B's power-on routine 0x8001decc faulted in the PS2_NE context.)
+
+**Next: Component C** — install an optical IRQ 9/10 handler/event-port in the
+netemu guest kernel (mirror ps2_emu's IRQ 9 -> 0x222cc) so the drive interrupt is
+consumed, then re-run the open probe. If it then survives, the IRQ was the cause.
+If it still powers off with C present, suspect B's power-on path and revisit.
+
+Also PROVEN this session: plug off/on does NOT auto-boot (powerOnReset=0, and
+enabling it is unproven on this Slim); recovery needs a >=30s AC discharge then a
+manual power-button press (or BT wake, which is unreliable after an abrupt cut).
