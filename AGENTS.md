@@ -69,3 +69,32 @@ See docs/PS3_BLUETOOTH_WAKE.md for the working Linux Bluetooth backend and
 the unresolved abrupt-cut limitation. PowerOnReset is saved as 1; its effect
 on this retail console remains UNKNOWN. No hardware pusher/CEC adapter was
 purchased or tested during that discussion.
+
+## Active owner instructions (2026-11-22, continued)
+
+- **Do not stop until the inserted PS2 disc boots.** Keep working relentlessly
+  across power-offs; do not hand back or pause for confirmation.
+- **Do not ask questions; always pick the recommended option** (the best option
+  by your judgment) and proceed. Reserve questions for crossing a hard safety
+  boundary only.
+- **FIRMWARE ROUTE AUTHORIZED.** The owner authorized patching the hypervisor /
+  secure modules (`sysmgr_ss`/LV1) to let the netemu partition reach the optical
+  drive, accepting the brick/power-off risk. Implementation stays on **live LV1
+  RAM patches** (webMAN `peek.lv1`/`poke.lv1`, reboot-recoverable); still flag
+  and stop before any actual `/dev_flash` / `/dev_flash2` write (permanent brick
+  risk). See docs/FIRMWARE_ROUTE_PLAN.md.
+- **Codex usage is exhausted until 2026-11-29** — do not launch Codex. Build arms
+  in order: agy (`agyp remus --dangerously-skip-permissions [--add-dir <dir>]`,
+  prompt via stdin; `agyp` is a PowerShell script at
+  `C:\Users\remus\.local\bin\agyp.ps1`), then agy gabar, then Codex when back.
+  Otherwise build inline yourself.
+- **Hard-freeze / power-off recovery loop:** on evidence of power-off or freeze,
+  cut smart-plug power, then notify the owner to press the physical power button.
+  The Tapo P115 plug reports live wattage (energy usage) — use it to tell
+  console on vs off. A clean AC-restore recovery needs a **>= 30 s plug-off
+  discharge** (the 5 s `ps3_power_manager.py recover` cycle is too short); then a
+  manual power-button press. Plug off/on does NOT auto-boot this console
+  (powerOnReset=0/unproven); BT wake is unreliable after an abrupt cut.
+- **A netemu probe that opens the optical drive is NOT fail-open.** After any
+  such test, restore the stock netemu (installer) BEFORE any further PS2 launch,
+  because without the live A+B patches the probe powers the console off again.
