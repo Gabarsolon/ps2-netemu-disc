@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-22. PROVEN: controller-free snapshots return cleanly to XMB. Live heap LPAR base is 0x03B00000, distinct from borrowed CDVD LPAR 0x500002C00000. HTAB size sampled zero, so cache queries skipped; attributes remain UNKNOWN. Stock restored and verified. Native allocator passed offline scenarios/rejections; guarded owned-memory control is next. Physical TDU sector delivery and disc boot remain UNKNOWN; Bluetooth HID input is still unaccepted._
+_Last update: 2026-11-22. PROVEN offline (NOT console): owned_control grabs one fresh retained 8 KiB owned block and verifies its CPU-EA/LPAR subranges; 194 PPC cases PASS, store audit bounded, decrypt roundtrip exact. Contains NO optical/DMA/ATAPI - memory-ownership prerequisite only. Risk: unbounded native UFS wait -&gt; console test needs owner present for power-cut recovery. Still UNKNOWN on console: live fresh allocation A, physical TDU sector delivery, disc auth, disc boot. Stock currently installed and verified._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

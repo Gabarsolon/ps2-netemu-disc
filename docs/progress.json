@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-22",
-  "note": "PROVEN: controller-free snapshots return cleanly to XMB. Live heap LPAR base is 0x03B00000, distinct from borrowed CDVD LPAR 0x500002C00000. HTAB size sampled zero, so cache queries skipped; attributes remain UNKNOWN. Stock restored and verified. Native allocator passed offline scenarios/rejections; guarded owned-memory control is next. Physical TDU sector delivery and disc boot remain UNKNOWN; Bluetooth HID input is still unaccepted.",
+  "note": "PROVEN offline (NOT console): owned_control grabs one fresh retained 8 KiB owned block and verifies its CPU-EA/LPAR subranges; 194 PPC cases PASS, store audit bounded, decrypt roundtrip exact. Contains NO optical/DMA/ATAPI - memory-ownership prerequisite only. Risk: unbounded native UFS wait -> console test needs owner present for power-cut recovery. Still UNKNOWN on console: live fresh allocation A, physical TDU sector delivery, disc auth, disc boot. Stock currently installed and verified.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
