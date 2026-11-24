@@ -14,7 +14,12 @@ CLI: python tools/ps3_bt_pad.py press up 300   |   python tools/ps3_bt_pad.py sh
 Runs tools/ps3_bt_controller.py --serve (WSL raw-HCI backend), which spoofs the
 paired DS3 address on the dongle for the session and restores it on exit.
 PROVEN 2026-11-24: full DS3 HID handshake + accepted D-pad input on the
-owner's PS3 slim (role switch enabled, 17-byte F2 report).
+owner's PS3 slim (role switch enabled, 17-byte F2 report); also in PS2 games.
+
+Reconnect: the PS3 tells controllers to disconnect (SET F4 42 08) when entering
+or leaving the PS2 emulator AND when powering off - indistinguishable. Paging a
+PS3 that is off wakes it, so auto-reconnect only happens once webMAN HTTP has
+been up for a while (back at XMB). Otherwise a PS press reconnects, like a DS3.
 """
 from __future__ import annotations
 
@@ -23,47 +28,146 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from pathlib import Path
 
 TOOL = Path(__file__).resolve().with_name('ps3_bt_controller.py')
+HOST = '192.168.0.169'
+
+
+def http_up(timeout=2):
+    try:
+        urllib.request.urlopen(f'http://{HOST}/', timeout=timeout)
+        return True
+    except Exception:
+        return False
 
 
 class PS3BtPad:
-    def __init__(self, seconds=3600, connect_timeout=45, verbose=False):
-        self.verbose = verbose
+    STABLE_S = 10   # webMAN must be up this long before an automatic reconnect
+    SETTLE_S = 15   # and at least this long after the disconnect
+
+    def __init__(self, seconds=3600, connect_timeout=45, verbose=False, auto_reconnect=True):
+        self.seconds, self.verbose, self.auto_reconnect = seconds, verbose, auto_reconnect
+        self.lines = queue.Queue()      # OK/ERR replies + INFO lines for callers
+        self.proc = None
+        self.connected = False
+        self.closing = False
+        self.ended = None
+        self.reconnect_now = threading.Event()
+        self._last_error = None
+        if not self._start_session(connect_timeout):
+            raise RuntimeError('Bluetooth pad failed: ' + (self._last_error or 'did not become READY'))
+        if auto_reconnect:
+            threading.Thread(target=self._supervise, daemon=True).start()
+
+    # ---- session management -------------------------------------------------
+    def _start_session(self, connect_timeout):
+        self._last_error = None
+        self.ready = threading.Event()
+        self.ended = threading.Event()
         self.proc = subprocess.Popen(
-            [sys.executable, str(TOOL), '--serve', '--seconds', str(seconds)],
+            [sys.executable, str(TOOL), '--serve', '--seconds', str(self.seconds)],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, bufsize=1)
-        self.lines = queue.Queue()
-        threading.Thread(target=self._pump, daemon=True).start()
-        deadline = time.monotonic() + connect_timeout
-        while time.monotonic() < deadline:
-            line = self._next(deadline - time.monotonic())
-            if line is None:
-                break
-            if line == 'READY':
-                return
-            if line.startswith('STOP:') or line.startswith('Controller diagnostic log'):
-                self.close()
-                raise RuntimeError('Bluetooth pad failed: ' + line)
-        self.close()
-        raise RuntimeError('Bluetooth pad did not become READY')
+        threading.Thread(target=self._pump, args=(self.proc, self.ready, self.ended),
+                         daemon=True).start()
+        if not self.ready.wait(connect_timeout) or self.ended.is_set():
+            self._stop_proc()
+            return False
+        self.connected = True
+        return True
 
-    def _pump(self):
+    def _pump(self, proc, ready, ended):
         logs = TOOL.parents[1] / 'local_only' / 'logs'
         logs.mkdir(parents=True, exist_ok=True)
         log = (logs / time.strftime('bt_pad_%Y%m%dT%H%M%S.log')).open('a', encoding='utf-8')
-        for line in self.proc.stdout:
+        for line in proc.stdout:
             line = line.rstrip('\r\n')
             log.write(line + '\n')
             log.flush()
             if self.verbose:
                 print('[pad]', line, flush=True)
-            if line.startswith(('READY', 'OK', 'ERR', 'STOP:', 'SESSION END', 'Controller diagnostic log')):
+            if line == 'READY':
+                ready.set()
+            elif line.startswith('STOP:'):
+                self._last_error = line
+                if self.connected:
+                    self.lines.put('INFO disconnected by console: ' + line[5:].strip())
+            elif line.startswith(('OK', 'ERR')):
                 self.lines.put(line)
         log.close()
-        self.lines.put(None)
+        self.connected = False
+        ended.set()
+
+    def _supervise(self):
+        while not self.closing:
+            self.ended.wait()
+            if self.closing:
+                return
+            self._stop_proc()
+            self.lines.put('INFO DISCONNECTED - auto-reconnect when back at XMB; '
+                           'press PS (Esc/P) to reconnect now')
+            lost_at, up_since = time.monotonic(), None
+            while not self.closing:
+                if self.reconnect_now.wait(3):
+                    self.reconnect_now.clear()
+                    if self.closing:
+                        return
+                    reason = 'PS pressed'
+                else:
+                    now = time.monotonic()
+                    up_since = (up_since or now) if http_up() else None
+                    if not (up_since and now - up_since >= self.STABLE_S
+                            and now - lost_at >= self.SETTLE_S):
+                        continue
+                    reason = 'XMB is back'
+                self.lines.put(f'INFO reconnecting ({reason})...')
+                if self._start_session(45):
+                    self.lines.put('INFO RECONNECTED')
+                    break
+                self.lines.put('INFO reconnect failed: ' + (self._last_error or 'not READY')
+                               + ' - will retry')
+                self.reconnect_now.clear()
+                up_since = None
+                time.sleep(5)
+
+    def _stop_proc(self):
+        proc = self.proc
+        if proc is None or proc.poll() is not None:
+            return
+        try:
+            proc.stdin.write('QUIT\n')
+            proc.stdin.flush()
+            proc.stdin.close()
+        except (OSError, ValueError):
+            pass
+        try:
+            proc.wait(timeout=60)  # worker restores the dongle identity first
+        except subprocess.TimeoutExpired:
+            proc.terminate()
+
+    # ---- commands -----------------------------------------------------------
+    @staticmethod
+    def _is_ps(cmd):
+        words = cmd.upper().split()
+        return bool(words) and (words[0] == 'PS' or
+                                (words[0] in ('DOWN', 'PRESS') and len(words) > 1 and words[1] == 'PS'))
+
+    def write_line(self, cmd):
+        """Fire-and-forget command; never raises. Used by the keyboard remote."""
+        cmd = cmd.strip()
+        if not cmd:
+            return
+        if not self.connected:
+            if self._is_ps(cmd):
+                self.reconnect_now.set()
+            return
+        try:
+            self.proc.stdin.write(cmd + '\n')
+            self.proc.stdin.flush()
+        except (OSError, ValueError):
+            self.connected = False
 
     def _next(self, timeout):
         try:
@@ -72,10 +176,11 @@ class PS3BtPad:
             return None
 
     def send_cmd(self, cmd, timeout=2.0):
-        if self.proc.poll() is not None:
-            raise RuntimeError('Bluetooth pad session has ended')
-        self.proc.stdin.write(cmd + '\n')
-        self.proc.stdin.flush()
+        if not self.connected:
+            if self._is_ps(cmd):
+                self.reconnect_now.set()
+            raise RuntimeError('Bluetooth pad disconnected (reconnecting)')
+        self.write_line(cmd)
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             line = self._next(deadline - time.monotonic())
@@ -109,17 +214,11 @@ class PS3BtPad:
         return self.send_cmd('RELEASE')
 
     def close(self):
-        if self.proc.poll() is None:
-            try:
-                self.proc.stdin.write('QUIT\n')
-                self.proc.stdin.flush()
-                self.proc.stdin.close()
-            except OSError:
-                pass
-            try:
-                self.proc.wait(timeout=60)  # worker restores the dongle identity first
-            except subprocess.TimeoutExpired:
-                self.proc.terminate()
+        self.closing = True
+        self.reconnect_now.set()
+        if self.ended is not None:
+            self.ended.set()
+        self._stop_proc()
 
     def __enter__(self):
         return self
@@ -136,8 +235,8 @@ class SerialShim:
         self.buffer = []
 
     def write(self, data):
-        self.pad.proc.stdin.write(data.decode('utf-8', 'ignore').replace('\r', ''))
-        self.pad.proc.stdin.flush()
+        for line in data.decode('utf-8', 'ignore').replace('\r', '').split('\n'):
+            self.pad.write_line(line)
         return len(data)
 
     def _drain(self):
@@ -171,8 +270,9 @@ def main():
     if not args:
         print(__doc__)
         return 2
-    with PS3BtPad(seconds=21600 if args[0] == 'shell' else 300) as pad:
-        if args[0] == 'shell':
+    shell = args[0] == 'shell'
+    with PS3BtPad(seconds=21600 if shell else 300, auto_reconnect=shell) as pad:
+        if shell:
             print('READY. Commands: PRESS <btn> [ms] | DOWN/UP <btn> | STICK <L|R> x y | RELEASE | QUIT')
             for line in sys.stdin:
                 if line.strip().upper() == 'QUIT':
@@ -182,7 +282,6 @@ def main():
                         print(pad.send_cmd(line.strip()))
                     except RuntimeError as exc:
                         print(exc)
-                        break
         else:
             print(pad.send_cmd(' '.join(args)))
             if args[0].upper() == 'PRESS':

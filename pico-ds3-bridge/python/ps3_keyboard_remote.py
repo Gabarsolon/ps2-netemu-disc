@@ -156,7 +156,12 @@ while running:
     title = title_font.render(f"PS3 Controller Remote ({LINK})", True, (255, 255, 255))
     screen.blit(title, (20, 20))
 
-    sub = font.render((f"Connected to {PORT} @ {BAUD} baud | Status: Active" if BAUD else "Connected over Bluetooth | Status: Active"), True, (80, 220, 100))
+    if BAUD:
+        sub = font.render(f"Connected to {PORT} @ {BAUD} baud | Status: Active", True, (80, 220, 100))
+    elif ser.pad.connected:
+        sub = font.render("Connected over Bluetooth | Status: Active", True, (80, 220, 100))
+    else:
+        sub = font.render("Bluetooth DISCONNECTED - waiting for XMB, or press Esc/P (PS) to reconnect", True, (240, 180, 60))
     screen.blit(sub, (20, 55))
 
     # Instructions box

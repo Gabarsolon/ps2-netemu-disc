@@ -386,7 +386,8 @@ Primary references: [GIMX Sixaxis implementation](https://github.com/matlo/GIMX/
   `vEthernet (WSL (Hyper-V firewall))`; a "Device in error state" attach was
   cleared by `pnputil /restart-device` on the parent hub (VID_05E3 PID_0610),
   no physical replug.
-- **UNKNOWN:** behavior inside PS2 emulation (netemu) and in games; whether the
+- **PROVEN (owner, 2026-11-24):** the Bluetooth pad also works inside a PS2 game
+  (stock ps2_netemu). **UNKNOWN:** whether the
   session survives the console going to standby (expected: link drops; the
   wake path still works only after a clean shutdown).
 - Consequence: the Pico is no longer needed as the DS3 bridge and can be
