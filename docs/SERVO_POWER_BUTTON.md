@@ -107,6 +107,15 @@ plug it into the PC, and use it only for the servo (power from PC USB, alive
 while the PS3 is off). No second Pico, OTG cable or diode needed. The section
 below is kept for history.
 
+Code ready (not run on hardware yet): `pico-servo/main.py` (MicroPython
+firmware: PRESS/HOLD/ANGLE/SET/REST/STATUS over USB serial, calibration in
+`cal.json`, PWM released when idle) and `tools/ps3_power_button.py` (PC side:
+`status`, `on` only when the console looks OFF, `off --yes`, `recover --yes`,
+calibration helpers). Flash and calibration steps: `pico-servo/README.md`.
+Note 2026-11-24: the Tapo plug did not answer at .12/.13 or anywhere on
+192.168.0.0/24 during this session; the tool then reports state UNKNOWN and
+`on` refuses to press unless webMAN is down AND the plug reads < 15 W.
+
 ## Open problem: Pico power (historical)
 
 - **PROVEN** (pico-ds3-bridge/README.md): the only Pico runs the DS3 USB
