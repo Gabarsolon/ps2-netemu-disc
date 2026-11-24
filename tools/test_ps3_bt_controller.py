@@ -120,6 +120,28 @@ class ControllerTests(unittest.TestCase):
         result = controller.windows_main(SimpleNamespace(seconds=5, duration=0.15, button='right'))
         self.assertEqual(result, 1)
 
+    def test_pad_state_commands_and_timed_release(self):
+        pad, hid = controller.PadState(), DS3Hid()
+        self.assertEqual(pad.command('PRESS x 100', 0.0), 'OK PRESS cross 100')
+        self.assertEqual(pad.command('DOWN up', 0.0), 'OK DOWN up')
+        self.assertEqual(pad.command('STICK R 0 255', 0.0), 'OK STICK')
+        self.assertTrue(pad.command('PRESS cross 5', 0.0).startswith('ERR'))
+        self.assertTrue(pad.command('STICK L 300 0', 0.0).startswith('ERR'))
+        report = pad.report(hid, 0.05)
+        self.assertEqual((report[3], report[4], report[25], report[9], report[10]),
+                         (16, 64, 255, 0, 255))
+        report = pad.report(hid, 0.2)  # cross expired, up still held
+        self.assertEqual((report[3], report[4]), (16, 0))
+        self.assertEqual(pad.command('RELEASE', 0.2), 'OK RELEASE')
+        self.assertEqual(pad.report(hid, 0.3), DS3Hid().input_report())
+        self.assertEqual(pad.command('QUIT', 0.3), 'OK QUIT')
+        self.assertTrue(pad.quit)
+
+    def test_f2_padded_to_gimx_length(self):
+        captured = bytes.fromhex('f2 ff ff 00 04 76 6e 8b 47 e4 00 03 50 81 d8 01 8a')
+        reply = DS3Hid(captured_f2=captured).handle_control(bytes.fromhex('4b f2 40 00'))
+        self.assertEqual(reply, b'\xa3' + captured + b'\x09')
+
 
 if __name__ == '__main__':
     unittest.main()

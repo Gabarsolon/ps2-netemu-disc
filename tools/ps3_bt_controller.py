@@ -32,6 +32,7 @@ BUTTONS = {
     'triangle': (4, 16, 23), 'circle': (4, 32, 24),
     'cross': (4, 64, 25), 'square': (4, 128, 26),
     'ps': (5, 1, None),
+    'l3': (3, 2, None), 'r3': (3, 4, None),
 }
 
 
@@ -84,6 +85,13 @@ class PadState:
             if verb == 'QUIT':
                 self.quit = True
                 return 'OK QUIT'
+            if verb == 'STATUS':
+                return 'OK STATUS streaming=1 held=%s timed=%s L=%s R=%s' % (
+                    ','.join(sorted(self.held)) or '-', ','.join(sorted(self.timed)) or '-',
+                    self.sticks['L'], self.sticks['R'])
+            if verb == 'PS':
+                self.timed['ps'] = now + 0.3
+                return 'OK PS 300ms'
         except ValueError:
             pass
         return 'ERR ' + line.strip()[:40]
@@ -418,6 +426,23 @@ def run_link(radio, pair, args):
         return link_loop(radio, pair, args, outgoing[0], acl_size, total, inputs, handle)
 
 
+def disconnect_acl(radio, inputs, handle):
+    """Leave the radio idle before identity restoration resets it."""
+    command = struct.pack('<HBHB', 0x0406, 3, handle, 0x13)  # HCI Disconnect, user ended
+    if radio.dev.ctrl_transfer(0x20, 0, 0, 0, command, timeout=2000) != len(command):
+        print('WARN: short HCI Disconnect transfer', flush=True)
+        return
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        event = inputs.take(inputs.events)
+        if event is not None and event[0] == 5 and len(event) == 6 \
+                and int.from_bytes(event[3:5], 'little') == handle:
+            print('ACL DISCONNECTED status 0x%02X reason 0x%02X' % (event[2], event[5]), flush=True)
+            return
+        time.sleep(0.005)
+    print('WARN: no Disconnection Complete within 3 s', flush=True)
+
+
 def link_loop(radio, pair, args, outgoing, acl_size, total, inputs, handle):
     from ps3_bt_linux import connection_event, connection_packet
     from ps3_bt_wake import mac_bytes
@@ -432,6 +457,7 @@ def link_loop(radio, pair, args, outgoing, acl_size, total, inputs, handle):
     connected_at = report_at = pressed_at = None
     sent_press = released = False
     serve = getattr(args, 'serve', False)
+    ready_sent = False
     pad = PadState() if serve else None
     commands = stdin_commands() if serve else None
     while time.monotonic() - started < args.seconds and not (pad and pad.quit):
@@ -484,9 +510,11 @@ def link_loop(radio, pair, args, outgoing, acl_size, total, inputs, handle):
                 connected_at = now
                 print('HID READY: both channels configured; starting input reports.', flush=True)
                 print('Initial PS press to register the controller, then release.', flush=True)
-                if serve:
-                    print('READY', flush=True)
-            if serve:
+            if serve and not ready_sent and (hid.reporting_enabled or now - connected_at > 4):
+                # Announce only after the PS3 finished its HID setup (SET F4 enable).
+                print('READY', flush=True)
+                ready_sent = True
+            if serve and ready_sent:
                 while True:
                     try:
                         line = commands.get_nowait()
@@ -539,6 +567,7 @@ def link_loop(radio, pair, args, outgoing, acl_size, total, inputs, handle):
         time.sleep(0.001)
     if serve:
         print('SESSION END', 'quit' if pad.quit else 'time bound', flush=True)
+        disconnect_acl(radio, inputs, handle)
         return
     if connected_at is None or (args.button and not released):
         raise ProbeError('HID channel/button test did not complete within bound')

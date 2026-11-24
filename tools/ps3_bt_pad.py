@@ -51,12 +51,18 @@ class PS3BtPad:
         raise RuntimeError('Bluetooth pad did not become READY')
 
     def _pump(self):
+        logs = TOOL.parents[1] / 'local_only' / 'logs'
+        logs.mkdir(parents=True, exist_ok=True)
+        log = (logs / time.strftime('bt_pad_%Y%m%dT%H%M%S.log')).open('a', encoding='utf-8')
         for line in self.proc.stdout:
             line = line.rstrip('\r\n')
+            log.write(line + '\n')
+            log.flush()
             if self.verbose:
                 print('[pad]', line, flush=True)
             if line.startswith(('READY', 'OK', 'ERR', 'STOP:', 'SESSION END', 'Controller diagnostic log')):
                 self.lines.put(line)
+        log.close()
         self.lines.put(None)
 
     def _next(self, timeout):
@@ -120,6 +126,44 @@ class PS3BtPad:
 
     def __exit__(self, *_):
         self.close()
+
+
+class SerialShim:
+    """pyserial-like object so pico-ds3-bridge scripts can drive the BT pad."""
+
+    def __init__(self, pad):
+        self.pad = pad
+        self.buffer = []
+
+    def write(self, data):
+        self.pad.proc.stdin.write(data.decode('utf-8', 'ignore').replace('\r', ''))
+        self.pad.proc.stdin.flush()
+        return len(data)
+
+    def _drain(self):
+        while True:
+            try:
+                line = self.pad.lines.get_nowait()
+            except queue.Empty:
+                return
+            if line is not None:
+                self.buffer.append(line)
+
+    @property
+    def in_waiting(self):
+        self._drain()
+        return len(self.buffer)
+
+    def readline(self):
+        self._drain()
+        return (self.buffer.pop(0) + '\n').encode() if self.buffer else b''
+
+    def reset_input_buffer(self):
+        self._drain()
+        self.buffer.clear()
+
+    def close(self):
+        self.pad.close()
 
 
 def main():

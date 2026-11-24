@@ -391,3 +391,18 @@ Primary references: [GIMX Sixaxis implementation](https://github.com/matlo/GIMX/
   wake path still works only after a clean shutdown).
 - Consequence: the Pico is no longer needed as the DS3 bridge and can be
   powered from the PC to drive the power-button servo (docs/SERVO_POWER_BUTTON.md).
+- **Fragility found later the same day (PROVEN):** a CLI session that sent one
+  press and QUIT immediately after channel setup (while the PS3 was still in
+  its HID setup) left the dongle unresponsive (`No reply to HCI 0x1001`). After
+  usbip re-attach, the WSL kernel's `btusb` driver bound to the dongle, sent its
+  own init and wedged it (`Controller not accepting commands anymore: ncmd = 0`).
+  A libusb reset then made it stop enumerating entirely; hub restarts did not
+  recover it. **Needs a physical unplug/replug** (then `usbipd bind --busid
+  <new> --force` if the port changed, and `usbipd attach --wsl`).
+- Fixes applied (not yet re-tested live because the dongle is wedged):
+  `READY` is now printed only after the PS3's SET F4 enable (or 4 s), commands
+  are ignored before that, and a session ends with HCI Disconnect + wait for
+  Disconnection Complete before the identity restore resets the radio.
+  `btusb` is blacklisted and unloaded in the dedicated `PS3-Bluetooth` WSL
+  distro (`/etc/modprobe.d/ps3-no-btusb.conf`). `tools/ps3_bt_pad.py` now logs
+  all worker output to `local_only/logs/bt_pad_*.log`.

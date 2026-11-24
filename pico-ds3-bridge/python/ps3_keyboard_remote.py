@@ -6,14 +6,27 @@ import time
 PORT = "COM9"
 BAUD = 115200
 
-print(f"Connecting to PS3 Controller Bridge on {PORT}...")
-try:
-    ser = serial.Serial(PORT, BAUD, timeout=0.1)
-    time.sleep(0.2)
-    ser.reset_input_buffer()
-except Exception as e:
-    print(f"ERROR: Could not open {PORT}: {e}")
-    sys.exit(1)
+if "--bt" in sys.argv:
+    # Bluetooth dongle instead of the Pico: python ps3_keyboard_remote.py --bt
+    import os
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+    from ps3_bt_pad import PS3BtPad, SerialShim
+    PORT, BAUD = "Bluetooth dongle", 0
+    print("Connecting to PS3 over the Bluetooth dongle (PS3 must be on)...")
+    try:
+        ser = SerialShim(PS3BtPad(seconds=21600))
+    except Exception as e:
+        print(f"ERROR: Bluetooth pad failed: {e}")
+        sys.exit(1)
+else:
+    print(f"Connecting to PS3 Controller Bridge on {PORT}...")
+    try:
+        ser = serial.Serial(PORT, BAUD, timeout=0.1)
+        time.sleep(0.2)
+        ser.reset_input_buffer()
+    except Exception as e:
+        print(f"ERROR: Could not open {PORT}: {e}")
+        sys.exit(1)
 
 def send_cmd(cmd):
     try:
