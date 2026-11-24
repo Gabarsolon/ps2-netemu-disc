@@ -12,6 +12,7 @@ if "--bt" in sys.argv:
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
     from ps3_bt_pad import PS3BtPad, SerialShim
     PORT, BAUD = "Bluetooth dongle", 0
+    LINK = "Bluetooth Dongle"
     print("Connecting to PS3 over the Bluetooth dongle (PS3 must be on)...")
     try:
         ser = SerialShim(PS3BtPad(seconds=21600))
@@ -19,6 +20,7 @@ if "--bt" in sys.argv:
         print(f"ERROR: Bluetooth pad failed: {e}")
         sys.exit(1)
 else:
+    LINK = "Pico 2 Bridge"
     print(f"Connecting to PS3 Controller Bridge on {PORT}...")
     try:
         ser = serial.Serial(PORT, BAUD, timeout=0.1)
@@ -37,7 +39,7 @@ def send_cmd(cmd):
 pygame.init()
 WIDTH, HEIGHT = 640, 480
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("PS3 Keyboard Remote (Pico 2 Bridge)")
+pygame.display.set_caption(f"PS3 Keyboard Remote ({LINK})")
 clock = pygame.time.Clock()
 
 font = pygame.font.SysFont("Segoe UI", 16)
@@ -146,15 +148,15 @@ while running:
     while ser.in_waiting:
         line = ser.readline().decode("utf-8", errors="ignore").strip()
         if line:
-            print(f"[Pico] {line}")
+            print(f"[{LINK}] {line}")
 
     # Draw UI
     screen.fill((25, 28, 36))
 
-    title = title_font.render("PS3 Controller Remote (Pico 2 Bridge)", True, (255, 255, 255))
+    title = title_font.render(f"PS3 Controller Remote ({LINK})", True, (255, 255, 255))
     screen.blit(title, (20, 20))
 
-    sub = font.render(f"Connected to {PORT} @ {BAUD} baud | Status: Active", True, (80, 220, 100))
+    sub = font.render((f"Connected to {PORT} @ {BAUD} baud | Status: Active" if BAUD else "Connected over Bluetooth | Status: Active"), True, (80, 220, 100))
     screen.blit(sub, (20, 55))
 
     # Instructions box
