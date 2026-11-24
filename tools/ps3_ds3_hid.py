@@ -48,7 +48,13 @@ class DS3Hid:
 
     def _feature_report(self, report_id: int) -> bytes | None:
         if report_id in self._captured:
-            return self._captured[report_id]
+            report = self._captured[report_id]
+            if report_id == 0xF2 and len(report) == 17:
+                # The USB capture stopped at 16 data bytes; GIMX (proven on PS3)
+                # answers 17. PROVEN 2026-11-24: the PS3 re-requested the 16-byte
+                # form forever. Append GIMX's trailing byte; address bytes untouched.
+                report += b'\x09'
+            return report
         if report_id == 0x01:
             # GIMX's fixed feature-01 protocol data, for controller index zero.
             body = bytes.fromhex(

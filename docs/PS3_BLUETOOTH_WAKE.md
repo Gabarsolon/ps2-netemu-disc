@@ -352,3 +352,42 @@ traces, registry-presence receipt, and the independent review are under
 Primary references: [GIMX Sixaxis implementation](https://github.com/matlo/GIMX/blob/e44a1cc9823939165d3d92418e9d679c66496ee1/core/connectors/sixaxis.c),
 [Bumble](https://github.com/google/bumble), and
 [Bluetooth controller error definitions](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-61/out/en/architecture%2C-change-history%2C-and-conventions/controller-error-codes.html).
+
+## Working Bluetooth DS3 controller, 2026-11-24
+
+- **PROVEN (console + capture card):** the external dongle now works as a full
+  DS3 controller. On the PS3 "Set the time and date" screen, a bounded test
+  pressed Up and the day changed 01 -> 02; an interactive session then sent
+  Down, Right, Up x3 and the date showed exactly 01/04. Frames:
+  `local_only/bt_ctl_before.png`, `bt_ctl_after2.png`, `bt_ctl_after3.png`.
+- **Root cause 1 (PROVEN):** after HCI Reset the dongle's Default Link Policy
+  is 0, so it refused the PS3's role-switch request. The PS3 must be piconet
+  master and dropped the link with reason 0x14. Writing Default Link Policy
+  0x0005 (role switch + sniff, HCI 0x080F) before paging fixed it: the log
+  shows ROLE CHANGE (dongle -> slave), then the PS3's HID setup, then a sniff
+  MODE CHANGE (interval 18 slots). BlueZ (GIMX's stack) enables this by default,
+  which is why GIMX never hit it.
+- **Root cause 2 (PROVEN):** the PS3 re-requested GET_REPORT 0xF2 forever while
+  we answered 16 data bytes (the USB capture was read with a 17-byte buffer).
+  Appending GIMX's 17th byte (0x09) let the handshake continue.
+- **PROVEN handshake order on this console:** GET feature 01, GET F2, SET EF
+  (byte6 a0), GET EF, SET EF (b0), GET EF, GET F8, SET output 01, GET F7,
+  SET F4 `42 0a 00 00` (enable), then output reports (LEDs) at ~60 Hz on the
+  interrupt channel while our 100 Hz input reports are accepted.
+- Tools: `tools/ps3_bt_controller.py --serve` (stdin commands
+  `PRESS <btn> [ms] | DOWN/UP <btn> | STICK <L|R> x y | RELEASE | QUIT`, up to
+  6 h, identity restored on exit) and `tools/ps3_bt_pad.py` (Python API with the
+  same methods as `pico-ds3-bridge/python/ps3_controller.py`; CLI
+  `python tools/ps3_bt_pad.py press up 300` or `... shell`). `--link-policy 0`
+  reproduces the old failure.
+- Backend notes from this session: the dongle had moved to a new USB port
+  (busid 8-3), so it needed `usbipd bind --force` again; the usbipd firewall
+  rule was bound to the previous WSL vEthernet GUID and was re-pointed to
+  `vEthernet (WSL (Hyper-V firewall))`; a "Device in error state" attach was
+  cleared by `pnputil /restart-device` on the parent hub (VID_05E3 PID_0610),
+  no physical replug.
+- **UNKNOWN:** behavior inside PS2 emulation (netemu) and in games; whether the
+  session survives the console going to standby (expected: link drops; the
+  wake path still works only after a clean shutdown).
+- Consequence: the Pico is no longer needed as the DS3 bridge and can be
+  powered from the PC to drive the power-button servo (docs/SERVO_POWER_BUTTON.md).

@@ -35,6 +35,85 @@ BUTTONS = {
 }
 
 
+STICKS = {'L': 7, 'R': 9}
+ALIASES = {'x': 'cross', 'o': 'circle', 'sq': 'square', 'tri': 'triangle'}
+
+
+class PadState:
+    """Live pad driven by text commands (same verbs as pico-ds3-bridge):
+    PRESS <btn> [ms] | DOWN <btn> | UP <btn> | STICK <L|R> <x> <y> | RELEASE | QUIT
+    """
+
+    def __init__(self):
+        self.held = set()
+        self.timed = {}
+        self.sticks = {'L': [128, 128], 'R': [128, 128]}
+        self.quit = False
+
+    def command(self, line, now):
+        words = line.split()
+        if not words:
+            return None
+        verb = words[0].upper()
+        name = ALIASES.get(words[1].lower(), words[1].lower()) if len(words) > 1 else None
+        try:
+            if verb == 'PRESS' and name in BUTTONS:
+                hold = int(words[2]) if len(words) > 2 else 120
+                if not 20 <= hold <= 15000:
+                    return 'ERR HOLD_MS 20..15000'
+                self.timed[name] = now + hold / 1000
+                return f'OK PRESS {name} {hold}'
+            if verb == 'DOWN' and name in BUTTONS:
+                self.held.add(name)
+                return f'OK DOWN {name}'
+            if verb == 'UP' and name in BUTTONS:
+                self.held.discard(name)
+                self.timed.pop(name, None)
+                return f'OK UP {name}'
+            if verb == 'STICK' and len(words) == 4 and words[1].upper() in STICKS:
+                x, y = int(words[2]), int(words[3])
+                if not (0 <= x <= 255 and 0 <= y <= 255):
+                    return 'ERR STICK 0..255'
+                self.sticks[words[1].upper()] = [x, y]
+                return 'OK STICK'
+            if verb == 'RELEASE':
+                self.held.clear()
+                self.timed.clear()
+                self.sticks = {'L': [128, 128], 'R': [128, 128]}
+                return 'OK RELEASE'
+            if verb == 'QUIT':
+                self.quit = True
+                return 'OK QUIT'
+        except ValueError:
+            pass
+        return 'ERR ' + line.strip()[:40]
+
+    def report(self, hid, now):
+        for name, until in list(self.timed.items()):
+            if now >= until:
+                del self.timed[name]
+        report = bytearray(hid.input_report())
+        for name in self.held | set(self.timed):
+            offset, mask, pressure = BUTTONS[name]
+            report[offset] |= mask
+            if pressure is not None:
+                report[pressure] = 255
+        for side, (x, y) in self.sticks.items():
+            report[STICKS[side]:STICKS[side] + 2] = bytes((x, y))
+        return bytes(report)
+
+
+def stdin_commands():
+    lines = queue.Queue()
+
+    def reader():
+        for line in sys.stdin:
+            lines.put(line)
+        lines.put('QUIT')
+    threading.Thread(target=reader, daemon=True).start()
+    return lines
+
+
 def button_report(hid, button=None):
     report = bytearray(hid.input_report())
     if button is not None:
@@ -55,6 +134,7 @@ class L2capHid:
         self.outgoing = deque()
         self.identifier = 0
         self.closed = False
+        self.last_interrupt = None
 
     def signal(self, code, payload, identifier=None):
         if identifier is None:
@@ -99,7 +179,10 @@ class L2capHid:
         channel = self.channels.get(cid)
         if channel is None or not self.ready(channel['psm']):
             raise ProbeError('Data on an unconfigured L2CAP channel')
-        print('HID RX', hex(channel['psm']), payload.hex(' '), flush=True)
+        if channel['psm'] == 0x11 or payload != self.last_interrupt:
+            print('HID RX', hex(channel['psm']), payload.hex(' '), flush=True)
+            if channel['psm'] == 0x13:
+                self.last_interrupt = bytes(payload)
         if channel['psm'] == 0x11:
             reply = self.hid.handle_control(payload)
             if reply is not None:
@@ -300,6 +383,18 @@ def run_link(radio, pair, args):
     if acl_size < 8 or not total:
         raise ProbeError('Invalid controller ACL capacity')
     print('ACL capacity:', acl_size, total, flush=True)
+    features = radio._exchange(0x1003, b'')  # Read Local Supported Features
+    if len(features) != 8:
+        raise ProbeError('Unexpected Read Local Supported Features response')
+    print('LMP features:', features.hex(' '), 'role_switch=%d sniff=%d' %
+          (bool(features[0] & 0x20), bool(features[0] & 0x80)), flush=True)
+    # HCI Reset leaves Default Link Policy at 0 (no role switch, no sniff). BlueZ,
+    # which GIMX runs on, enables role switch/sniff by default. A PS3 that cannot
+    # become piconet master may drop the link (observed reason 0x14).
+    policy = args.link_policy & ~((0 if features[0] & 0x20 else 1) | (0 if features[0] & 0x80 else 4))
+    radio._exchange(0x080F, struct.pack('<H', policy))  # Write Default Link Policy Settings
+    readback = radio._exchange(0x080E, b'')
+    print('Default link policy: requested 0x%04X readback %s' % (policy, readback.hex(' ')), flush=True)
     packet = connection_packet(pair['console_mac'])
     if radio.dev.ctrl_transfer(0x20, 0, 0, 0, packet, timeout=2000) != len(packet):
         raise ProbeError('Short Create Connection transfer')
@@ -336,12 +431,16 @@ def link_loop(radio, pair, args, outgoing, acl_size, total, inputs, handle):
     started = time.monotonic()
     connected_at = report_at = pressed_at = None
     sent_press = released = False
-    while time.monotonic() - started < args.seconds:
+    serve = getattr(args, 'serve', False)
+    pad = PadState() if serve else None
+    commands = stdin_commands() if serve else None
+    while time.monotonic() - started < args.seconds and not (pad and pad.quit):
         event = inputs.take(inputs.events)
         if event is not None:
             if len(event) < 2 or len(event) != event[1] + 2:
                 raise ProbeError('Malformed HCI event')
-            print('HCI RX', event.hex(' '), flush=True)
+            if event[0] != 0x13:
+                print('HCI RX', event.hex(' '), flush=True)
             result = connection_event(event, target)
             if result is not None:
                 raise ProbeError('Unexpected duplicate ACL connection event')
@@ -355,6 +454,12 @@ def link_loop(radio, pair, args, outgoing, acl_size, total, inputs, handle):
                             raise ProbeError('Controller completed more packets than submitted')
                         outstanding -= count
                         credits += count
+            elif event[0] == 0x12 and len(event) == 10:
+                print('ROLE CHANGE status 0x%02X new_role=%s' %
+                      (event[2], 'slave' if event[9] else 'master'), flush=True)
+            elif event[0] == 0x14 and len(event) == 8:
+                print('MODE CHANGE status 0x%02X mode=%d interval=%d' %
+                      (event[2], event[5], int.from_bytes(event[6:8], 'little')), flush=True)
             elif event[0] == 5 and len(event) == 6 and int.from_bytes(event[3:5], 'little') == handle:
                 raise ProbeError(f'Console disconnected ACL: reason 0x{event[5]:02X}')
             elif event[0] in (0x16, 0x17):  # PIN / link-key request, never invent a key.
@@ -379,10 +484,30 @@ def link_loop(radio, pair, args, outgoing, acl_size, total, inputs, handle):
                 connected_at = now
                 print('HID READY: both channels configured; starting input reports.', flush=True)
                 print('Initial PS press to register the controller, then release.', flush=True)
-            if args.button and pressed_at is None and now - connected_at >= 2:
+                if serve:
+                    print('READY', flush=True)
+            if serve:
+                while True:
+                    try:
+                        line = commands.get_nowait()
+                    except queue.Empty:
+                        break
+                    answer = pad.command(line, now)
+                    if answer:
+                        print(answer, flush=True)
+                if (report_at is None or now - report_at >= 0.01) and not fragments \
+                        and not link.outgoing and credits:
+                    report = pad.report(hid, now)
+                    if now - connected_at < 0.2:
+                        report = bytearray(report)
+                        report[5] |= 1
+                        report = bytes(report)
+                    link.send(0x13, report)
+                    report_at = now
+            elif args.button and pressed_at is None and now - connected_at >= 2:
                 pressed_at = now
             pressed = pressed_at is not None and now - pressed_at < args.duration
-            if report_at is None or now - report_at >= 0.01:
+            if not serve and (report_at is None or now - report_at >= 0.01):
                 # Skip a sample while transport is backlogged; never queue stale presses.
                 if not fragments and not link.outgoing and credits:
                     initial_ps = now - connected_at < 0.2
@@ -412,6 +537,9 @@ def link_loop(radio, pair, args, outgoing, acl_size, total, inputs, handle):
         if handle is None and now - started > 10:
             raise ProbeError('No ACL connection within ten seconds')
         time.sleep(0.001)
+    if serve:
+        print('SESSION END', 'quit' if pad.quit else 'time bound', flush=True)
+        return
     if connected_at is None or (args.button and not released):
         raise ProbeError('HID channel/button test did not complete within bound')
     print('PROVEN: HID negotiation and report transport completed; inspect video for button acceptance.', flush=True)
@@ -487,11 +615,21 @@ def windows_main(args):
             raise ProbeError('Could not resolve controller worker path')
         command = ['wsl.exe', '-d', DISTRO, '-u', 'root', '--exec', 'timeout',
                    '--signal=TERM', '--kill-after=10s', str(args.seconds + 25) + 's',
-                   'python3', '-B', path, '--seconds', str(args.seconds), '--duration', str(args.duration)]
+                   'python3', '-B', path, '--seconds', str(args.seconds), '--duration', str(args.duration),
+                   '--link-policy', hex(getattr(args, 'link_policy', 0x0005))]
         if args.button:
             command.extend(['--button', args.button])
+        if getattr(args, 'serve', False):
+            command.append('--serve')
         try:
-            result = _run(command, log, timeout=args.seconds + 40)
+            if getattr(args, 'serve', False):
+                # Interactive session: caller's stdin/stdout pass straight through.
+                log.write(('SERVE ' + ' '.join(command) + '\n').encode())
+                log.flush()
+                import subprocess
+                result = subprocess.run(command, timeout=args.seconds + 40)
+            else:
+                result = _run(command, log, timeout=args.seconds + 40)
         finally:
             restored = _worker(_linux_worker_path(log), '--restore-only', log) == 0
     print('Controller diagnostic log:', log_path)
@@ -503,9 +641,16 @@ def main():
     parser.add_argument('--button', choices=BUTTONS)
     parser.add_argument('--duration', type=float, default=0.15)
     parser.add_argument('--seconds', type=int, default=15)
+    parser.add_argument('--link-policy', type=lambda v: int(v, 0), default=0x0005,
+                        help='HCI default link policy before paging (0x0005 = role switch + sniff, 0 = old behavior)')
+    parser.add_argument('--serve', action='store_true',
+                        help='keep the pad connected and read PRESS/DOWN/UP/STICK/RELEASE/QUIT lines on stdin')
     args = parser.parse_args()
-    if not 5 <= args.seconds <= 60 or not 0.05 <= args.duration <= 3:
-        parser.error('Use 5..60 seconds and a button duration of 0.05..3 seconds')
+    if not 0 <= args.link_policy <= 0x000F:
+        parser.error('link policy must be 0..0x000F')
+    limit = 21600 if args.serve else 60
+    if not 5 <= args.seconds <= limit or not 0.05 <= args.duration <= 3:
+        parser.error(f'Use 5..{limit} seconds and a button duration of 0.05..3 seconds')
     if sys.platform == 'win32':
         return windows_main(args)
     if not sys.platform.startswith('linux'):
