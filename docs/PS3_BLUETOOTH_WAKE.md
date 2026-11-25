@@ -1,4 +1,4 @@
-# PS3 Bluetooth wake — standby works; abrupt AC recovery unresolved
+# PS3 Bluetooth wake — standby works; abrupt AC recovery via sc 377 auto-boot
 
 ## Result and owner commands
 
@@ -9,7 +9,10 @@
   not wake the console in that state. This differs from the clean-shutdown test.
 - **UNKNOWN:** whether that state is caused by lost wake configuration, power
   sequencing, an intentional policy, or another console-side condition.
-  Unattended recovery after a true hard cut is not yet solved.
+  Bluetooth wake after a true hard cut is still not solved. Unattended
+  recovery is solved another way: arm `syscall.ps3?377|1` after each boot,
+  then an AC cycle auto-boots the console (see "Auto-boot after hard AC cut
+  via sc 377" below; PROVEN 3/3 armed, control stayed off).
 - **PROVEN, 2026-11-22:** the external Barrot dongle woke the PS3 from normal
   standby. Console boot was confirmed by webMAN returning online.
 - **PROVEN:** the complete recovery sequence also passed: clean XMB shutdown,
@@ -42,6 +45,50 @@ watchdog. A healthy PS2 session can make webMAN unavailable, so HTTP availabilit
 is not used to decide whether the emulator has frozen. The recovery command
 verifies the P115 and the actual Bluetooth backend before any console power
 change, then attempts a clean shutdown before the requested AC cycle.
+
+## Auto-boot after hard AC cut via sc 377 (2026-11-25)
+
+- **PROVEN (live, 2026-11-25):** at XMB, webMAN
+  `http://192.168.0.169/syscall.ps3?377|1` (`sys_sm_set_shop_mode(1)`)
+  returned `syscall1(377) => 0x0`. The owner then pulled AC while the console
+  was running, waited about 30 s and restored AC without touching the console.
+  It booted by itself: webMAN online about 70 s after the drop. Evidence:
+  `local_only/agy/sc377_test/`.
+- **PROVEN (offline, fw 4.93 `lv1.elf` sysmgr_ss decompilation by agy,
+  reviewed):** the LV1 handler at `0x8001c370` checks LPAR privilege bit
+  `0x4000`, sets or clears `PS3_SM_WAKE_P_O_R` (`0x80000000`) in the
+  wake-source word and sends Syscon command `0x1312` (set wake source) through
+  `0x80020ea8`. No flash or Syscon EEPROM write. Report:
+  `local_only/agy/bt_hardcut_wake_analysis.md`.
+- **PROVEN (live repeat, P115 at 192.168.0.12, 30 s AC off from running XMB,
+  2026-11-25 14:22-14:28):**
+
+  | Run | `377|1` before cut | Result |
+  |---|---|---|
+  | 1 | yes (`=> 0x0`) | auto-boot, webMAN online 18 s after AC on |
+  | 2 | yes, re-armed after run 1 boot | auto-boot, webMAN online 18 s after AC on |
+  | 3 (control) | no, after run 2 boot | stayed off 180 s after AC on |
+
+  Log: `local_only/agy/sc377_test/cuts.log`, runner `run_cuts.py`.
+- **PROVEN (run 3) + INFERRED cause:** the flag does not survive a boot. LV1
+  boot resends the default `0x000000f4` (`0x80021f24`), so arm it again after
+  every boot. `syscall.ps3?377|0` clears it. This is power-on-reset auto-boot
+  on AC restore, not Bluetooth wake. It also boots after any planned
+  unplug/replug while armed.
+- **Recovery use:** re-arm after each boot, then a frozen console can be
+  recovered with a P115 AC cycle alone (no Bluetooth, no button press).
+- **PROVEN (live, 2026-11-25 16:24-16:28): automatic re-arm installed.**
+  `/dev_hdd0/autoexec.bat` (webMAN runs it after its servers start at boot;
+  sha256 `26d65af84cef3a6b...`, FTP readback matched) contains the single web
+  command `/syscall.ps3?377|1` plus comments and the required trailing blank
+  line. Test: run 1 armed by hand; runs 2 and 3 relied only on autoexec.bat.
+  All three 30 s hard cuts from XMB auto-booted (webMAN online 18 s after AC
+  on). Log: `local_only/agy/sc377_test/cuts.log`, runner `run_autoexec.py`.
+  Each cut came about 15 s after webMAN was reachable; a cut during the first
+  seconds of boot, before autoexec.bat runs, is untested.
+- **Undo:** delete `/dev_hdd0/autoexec.bat` by FTP, then reboot, or call
+  `/syscall.ps3?377|0` for the current boot. While it is installed, any
+  unplug/replug or power outage turns the console on when power returns.
 
 ## Proven wake sequence
 
@@ -78,7 +125,7 @@ The unused HID prototype remains an experiment, not the owner-facing route.
 | Paired DS3 | 04:76:6E:8B:47:E4 |
 | Console Bluetooth address | 78:DD:08:8D:37:F4 |
 | Console LAN address | 192.168.0.169 |
-| Tapo P115 LAN address | 192.168.0.13 |
+| Tapo P115 LAN address | 192.168.0.12 (private config, verified 2026-11-25; was .13 on 2026-11-22) |
 | Original radio class | 000000 |
 
 - **PROVEN:** controller F2/F5 USB reports supplied the two pairing addresses.

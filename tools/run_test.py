@@ -4,7 +4,7 @@ Usage (python -I tools/run_test.py [--install <self>] [--wait 20] [--pad] [--dry
   --install <self>  run tools\\install_netemu.ps1 -File <self> -Force first (audited builds only)
   --iso <name>      ISO file name under /dev_hdd0/PS2ISO (default: the Buzz! test ISO)
   --wait N          seconds to wait after the game starts (default 20)
-  --keep            do not exit the game (default: exit with CROSS, LEFT, CROSS on the Pico bridge, COM9)
+  --keep            do not exit the game (default: exit with PS, CROSS, LEFT, CROSS on the Bluetooth pad, tools/ps3_bt_pad.py)
   --dry             print the steps and URLs, send nothing
 Only webMAN GETs (mount.ps3, quit.ps3, root), an FTP read of the log, and optional controller taps.
 """
@@ -70,13 +70,12 @@ def main():
         print("play:", get(play))
         time.sleep(a.wait)
     if not a.keep:
-        sys.path.insert(0, os.path.expanduser("~"))
-        from ps3_controller import PS3Controller
-        ctl = PS3Controller("COM9")
+        sys.path.insert(0, HERE)
+        from ps3_bt_pad import PS3BtPad  # replaces the Pico bridge (COM9); same press() API
+        ctl = PS3BtPad(seconds=300)
         try:
-            print("status:", ctl.get_status())
             for b in ("PS", "CROSS", "LEFT", "CROSS"):
-                print(b, ctl.press(b, 150))
+                print(b, ctl.press(b.lower(), 150))
                 time.sleep(2.0 if b == "PS" else 1.2)
         finally:
             ctl.close()
