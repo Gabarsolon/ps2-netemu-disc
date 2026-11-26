@@ -15,7 +15,8 @@ power-off. Details and evidence: [PS3_BLUETOOTH_WAKE.md](PS3_BLUETOOTH_WAKE.md)
 | Buttons | `python tools/ps3_bt_pad.py press <btn> [ms]` or `... shell`; Python `PS3BtPad` | PROVEN at XMB and in a PS2 game 2026-11-24 |
 | Launch an ISO | `GET http://192.168.0.169/play.ps3/dev_hdd0/PS2ISO/<iso>` or `tools/run_test.py` | PROVEN |
 | Auto-exit PS2 | auto-return netemu builds (reason byte 2 after 20 s) | PROVEN carrier runs, ~75 s to XMB |
-| Recover | `python tools/ps3_auto.py recover` (30 s AC cut, waits for auto-boot) | PROVEN 3/3 hard cuts from XMB via autoexec.bat |
+| Recover | `python tools/ps3_auto.py recover` (30 s AC cut, waits for auto-boot, else servo press) | auto-boot PROVEN 3/3 hard cuts from XMB via autoexec.bat; servo step PROVEN alone 2026-11-26, full fallback path only dry-run |
+| Power button | `python tools/ps3_power_button.py on` (Pico servo, [SERVO_POWER_BUTTON.md](SERVO_POWER_BUTTON.md)) | PROVEN boot from standby 2026-11-26 |
 | Install netemu | `tools/install_netemu.ps1 -File <self> -Force` (backup + hash readback) | PROVEN |
 
 Fixed facts: PS3 `192.168.0.169`; Tapo P115 at the IP in the private config
@@ -31,6 +32,44 @@ itself (webMAN up ~18 s after AC on). No power button, no Bluetooth wake.
 LV1 clears the flag on every boot; autoexec re-arms it. **Do not delete
 autoexec.bat.** Old notes that say "plug cycle does not auto-boot, owner must
 press the button" predate this and are superseded.
+
+**PROVEN once (2026-11-26):** the auto-boot also happens after a clean webMAN
+`/shutdown.ps3` followed by a `recover` cut (webMAN up 18 s after AC on). A
+clean shutdown therefore does not exercise the servo step.
+
+**Exception (PROVEN by sysmgr_ss disassembly, 2026-11-25):** a panic shutdown
+overwrites the wake source and wipes `PS3_SM_WAKE_P_O_R`, so after a panic AC
+restore does not boot the console. Only the power button does. The servo
+fallback below covers this.
+
+## Automatic power recovery
+
+One command, no owner action:
+
+```
+python tools/ps3_auto.py recover
+```
+
+| Step | Action | If it works | If not |
+|---|---|---|---|
+| 0 | webMAN still answers | refuse, exit 1 (`--force` to override) | continue |
+| 1 | Smart plug off 30 s, then on (force-off) | continue | AC on not verified: exit 2 |
+| 2 | Wait 180 s for the sc 377 auto-boot | exit 0 | continue |
+| 3 | Servo presses the power button once | wait 180 s, exit 0 | exit 3 |
+
+Step 3 presses only if all of these hold: the plug is readable and on, it draws
+less than 15 W, and webMAN does not answer. A press on a running console turns
+it off, so any doubt means no press (exit 3). It never presses twice.
+
+Force-off is always the smart plug (owner decision 2026-11-26), never a long
+hold of the button.
+
+Needs, for step 3: the Pico on PC USB with `pico-servo/main.py`, the servo
+mounted at the button, calibration `rest=0 press=45`, and no `servo_jog.py`
+running (it holds the serial port). Check with
+`python tools/ps3_power_button.py status`.
+
+Exit 2 or 3: notify the owner.
 
 ## The loop
 
@@ -57,9 +96,10 @@ press the button" predate this and are superseded.
      No XMB within 60 s of that and the screen does not change: hung. Go to 7.
 7. **Recover.** `python tools/ps3_auto.py recover` (add `--force` only when
    webMAN still answers but the console is clearly wrong). Exit 0 = booted
-   by itself. Exit 3 = no boot in 180 s: notify the owner to press the power
-   button. Exit 2 = plug did not confirm on: notify the owner. The plug can be
-   unreachable for a while after a console power-off; the tool retries.
+   (by itself or by the servo). Exit 3 = not booted even after the servo step:
+   notify the owner. Exit 2 = plug did not confirm on: notify the owner. The
+   plug can be unreachable for a while after a console power-off; the tool
+   retries. See "Automatic power recovery" above.
 8. **After any recovery or test:** live LV1 patches are gone (RAM only).
    A build that is not fail-open (any optical probe) must be replaced by the
    stock netemu **before any further PS2 launch**: run the installer with the
@@ -90,7 +130,11 @@ press the button" predate this and are superseded.
 ## Not proven yet
 
 - A cut during the first seconds of boot, before autoexec.bat runs: the flag
-  is not armed, so it would stay off (`recover` exit 3).
+  is not armed, so it would stay off (`recover` then tries the servo).
+- The whole `recover` run ending in the servo step. PROVEN separately on
+  2026-11-26: `servo_press()` after a webMAN shutdown booted the console
+  (webMAN up 13 s after the press); the branch logic was dry-run with fakes
+  (6/6). A servo press after a real panic is still untested.
 - A real hung emulator recovered by this loop (only clean XMB cuts tested).
 - Standby wattage threshold (record it).
 - Launching the inserted physical disc via webMAN instead of the XMB disc icon.

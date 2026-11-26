@@ -2,15 +2,17 @@
 
     python tools/ps3_auto.py state              # webMAN HTTP + XMB flag + plug on/off + watts
     python tools/ps3_auto.py grab [out.png]     # one capture-card frame; unmutes the card and retries if black
-    python tools/ps3_auto.py recover            # 30 s AC cut, then wait for the sc 377 auto-boot
+    python tools/ps3_auto.py recover            # 30 s AC cut, wait for the sc 377 auto-boot, else servo press
     python tools/ps3_auto.py recover --force    # same, even if webMAN HTTP still answers
 
 Recovery relies on /dev_hdd0/autoexec.bat re-arming syscall 377 (PS3_SM_WAKE_P_O_R)
 at every boot, so AC restore boots the console by itself (PROVEN 3/3, see
 docs/PS3_BLUETOOTH_WAKE.md). recover refuses while webMAN answers unless --force:
 a healthy PS2 session has no network, so HTTP down alone is not a freeze. Decide
-"frozen" first (docs/AUTOMATION.md), then call recover. Exit codes: 0 ok, 1 refused,
-2 AC on not verified, 3 no boot within the wait.
+"frozen" first (docs/AUTOMATION.md), then call recover. If no auto-boot (a panic
+wipes the wake flag) and the console is provably off, the Pico servo presses the
+power button once (docs/SERVO_POWER_BUTTON.md). Exit codes: 0 ok, 1 refused,
+2 AC on not verified, 3 not booted even after the servo step.
 """
 from __future__ import annotations
 
@@ -23,6 +25,7 @@ import urllib.request
 from pathlib import Path
 
 HOST = 'http://192.168.0.169'
+OFF_WATTS = 15   # below this the console is in standby (XMB is ~73 W)
 ROOT = Path(__file__).resolve().parents[1]
 CAPTURE_TOOLS = Path(r'C:\Users\remus\ps3-240p\tools')   # capture_unmute.py lives here
 sys.path.insert(0, r'C:\Users\remus')                     # ps3_power_manager.py (private Tapo config)
@@ -124,6 +127,40 @@ async def cut(off_s):
     return False
 
 
+def wait_boot(wait_s):
+    """Seconds until webMAN answers, or None."""
+    t0 = time.time()
+    while time.time() - t0 < wait_s:
+        if http(timeout=2):
+            return time.time() - t0
+        time.sleep(2)
+    return None
+
+
+def servo_press():
+    """Press the power button once, only if the console is provably off.
+
+    A press on a running console turns it off, so an unreadable plug or high
+    wattage means no press.
+    """
+    try:
+        on, watts = asyncio.run(plug_state())
+    except Exception as e:
+        print(f'servo not pressed: plug unreadable ({type(e).__name__})')
+        return False
+    if not on or watts >= OFF_WATTS or http():
+        print(f"servo not pressed: console not provably off (plug={'on' if on else 'off'} watts={watts})")
+        return False
+    try:
+        from ps3_power_button import Servo
+        reply = Servo().send('PRESS 300', timeout=9)
+    except (Exception, SystemExit) as e:  # no Pico, port held by servo_jog.py, no reply
+        print(f'servo failed: {e}')
+        return False
+    print(f'servo: {reply}')
+    return reply.startswith('OK')
+
+
 def recover(force, off_s, wait_s):
     if http() and not force:
         print('webMAN answers: console is not off/frozen at GameOS. Refusing (use --force).')
@@ -131,13 +168,17 @@ def recover(force, off_s, wait_s):
     if not asyncio.run(cut(off_s)):
         print('AC ON NOT VERIFIED - power the plug on by hand.')
         return 2
-    t0 = time.time()
-    while time.time() - t0 < wait_s:
-        if http(timeout=2):
-            print(f'auto-boot: webMAN online {time.time() - t0:.0f} s after AC on')
+    took = wait_boot(wait_s)
+    if took is not None:
+        print(f'auto-boot: webMAN online {took:.0f} s after AC on')
+        return 0
+    print(f'no auto-boot within {wait_s} s (panic standby, or cut before autoexec ran?): trying the servo')
+    if servo_press():
+        took = wait_boot(wait_s)
+        if took is not None:
+            print(f'servo boot: webMAN online {took:.0f} s after the press')
             return 0
-        time.sleep(2)
-    print(f'no boot within {wait_s} s (autoexec.bat missing, or cut before it ran?) - press the power button.')
+    print('console not booted - press the power button by hand.')
     return 3
 
 
