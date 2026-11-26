@@ -121,17 +121,36 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
         /* Exactly one outer restore, including every normal decline. */
         (void)irq_restore(saved);
         /* FIRMWARE-ROUTE PROBE (test build only): with the owned block held and
-         * IRQs restored, open the optical drive (bus 4, dev 2) exactly once and
-         * record the HV return in free owned-block slots. REQUIRES external A+B
-         * sysmgr_ss LV1 patches; without them this open powers the console off
-         * (that is the test). No DMA, no read, no device command here. */
+         * IRQs restored, make one LV1 open_device call via netemu's FORWARDED
+         * guest-sc bridge and record the return. No DMA, no read, no device
+         * command here. */
         if (status==OWNED && alloc) {
-            /* PROBE 3: SAFE DIAGNOSTIC. bus=99 (>=5) returns -17 (LV1_NO_BUS)
-             * WITHOUT touching hardware, so no power-off. Confirms the sc 1
-             * hypercall path + snapshot capture end to end. Expect oret=-17
-             * (0x1ffffffef). cret sentinel = "BUS99SAF". */
-            u64 oret=lv1_open_device(99,2,0);
-            probe_store(alloc,oret,0x4255533939534146ULL);
+            /* PROBE 7a: REPOSITORY ENUMERATION (safe, no hardware, no open). Probes
+             * 5/6 proved the optical opens and its interrupts route to a guest event
+             * port. Before issuing any read we must know the optical's repository
+             * dev_id and whether it is a storage node at all. Call netemu's own
+             * enumerator (fn_001e9ba0, r2=TOC via trampoline) for the OPTICAL type
+             * (bus type 5, dev type 5 -- same as ps2_emu fn_00022460) and, as a
+             * control, the FLASH type (5,14) which netemu itself enumerates. The
+             * enumerator only reads the LV1 repository (forwarded sc0 internally), so
+             * this cannot touch the drive or power off. Store, per device:
+             * (found<<32)|(u32)out1_handle. If optical found==1 -> it is a storage
+             * repository node -> probe 7b does storage_read(245) (forwarded, no A).
+             * If optical found==0 but flash found==1 -> optical is NOT a storage node
+             * -> the read needs send_device_command(248)+ATAPI CDB (direct sc1, A). */
+            /* PROBE 7b: derive the numeric dev_id for the optical (5,5) vs the flash
+             * (5,14) control. Probe 7a proved the enumerator finds the storage bus
+             * (bus 4). Now convert each (o1,o2) node pair to its dev_id via
+             * native_repo_devid (FUN_001ea1e8), the id storage_read takes. Store the
+             * optical dev_id and the flash dev_id. If they differ and the optical
+             * dev_id is valid, the optical is a distinct storage node -> probe 7c
+             * does storage_read(245) (forwarded, no A). Still no open, no command. */
+            u64 o1=0,o2=0,f1=0,f2=0;
+            u64 of=(u64)(native_repo_enum(5,5,0,&o1,&o2)&0xff);
+            u64 ff=(u64)(native_repo_enum(5,14,0,&f1,&f2)&0xff);
+            u64 odev=of?native_repo_devid(o1,o2):0;
+            u64 fdev=ff?native_repo_devid(f1,f2):0;
+            probe_store(alloc,odev,fdev);
         }
     }
     if (!empty()) return result;

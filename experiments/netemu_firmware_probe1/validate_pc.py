@@ -18,6 +18,7 @@ MASK=(1<<64)-1; BUSY=1<<63; META_SIZE=0x10048; DELAY=20*79800000
 MAGIC=0x4f574e3100000000
 STOCK_SHA='63f12b7e00959c758f8aedfd23d1b8bc78e8ae7d922048e4765aaaef1dbbc6d3'
 PROBE_MARK_CLOSE=0x4255533939534146
+PROBE_NOCLOSE=0x4e4f434c4f534544
 REPORT={}
 def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def dump(name,obj): (OUT/name).write_text(json.dumps(obj,indent=2)+'\n')
@@ -217,6 +218,18 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                         self.calls.append('clock')
                         if self.clock_effect: self.clock_effect(self)
                         self.ret(self.now); continue
+                    if pc==0x1e9ba0:
+                        # native_repo_enum(bus_type,dev_type,idx,&o1,&o2) -> found; r2=TOC.
+                        assert self.get('r2')==TOC
+                        o1p=self.get('r6'); o2p=self.get('r7')
+                        assert self.stack(o1p,8) and self.stack(o2p,8)
+                        self.fixture(o1p,struct.pack('>Q',getattr(self,'repo_o1',0x11)))
+                        self.fixture(o2p,struct.pack('>Q',getattr(self,'repo_o2',0x22)))
+                        self.calls.append('repo_enum'); self.ret(getattr(self,'repo_found',1)); continue
+                    if pc==0x1ea1e8:
+                        # native_repo_devid(o1,o2) -> numeric dev_id; r2=TOC.
+                        assert self.get('r2')==TOC
+                        self.calls.append('repo_devid'); self.ret(getattr(self,'repo_devid',0x2)); continue
                     boundary={0x1ecc5c:'open',0x1ec760:'stat',0x1ed458:'write',0x1ecb10:'close'}.get(pc)
                     if boundary:
                         assert kind=='shutdown' and original==1 and not self.depth and self.phase()==4
@@ -233,7 +246,8 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             ptr=self.get('r5'); assert self.stack(ptr,512)
                             sec=self.rd(ptr,512); q=struct.unpack('>64Q',sec)
                             assert q[0:2]==(0x4f574e5345433100,0x1000000000200) and q[4:7]==(0xb46100,2,expected)
-                            expected_probe=(getattr(self,'lv1_open_ret',(-17)&MASK)&MASK,PROBE_MARK_CLOSE) if (q[2]>>32)==1 else (0,0)
+                            _dv=getattr(self,'repo_devid',0x2)&MASK
+                            expected_probe=(_dv,_dv) if (q[2]>>32)==1 else (0,0)
                             assert q[8:20]==tuple(self.state()) and q[62:]==expected_probe
                             self.sectors.append(sec); self.ret(self.write_rc)
                         else: assert self.get('r3')==self.fd; self.ret(self.close_rc)
@@ -257,14 +271,24 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                         helper.append(pc)
                     w=int.from_bytes(self.rd(pc,4),'big'); op=w>>26
                     if op==17:
-                        if w==0x44000022 and 0x4c60<=pc<0x4d00:
-                            hv=self.get('r11'); assert hv in (170,171)
+                        if w==0x44000002 and 0x4c60<=pc<0x5000:
+                            r11=self.get('r11'); assert (r11>>16)==0x8000,'forwarded sc0 bridge bit'
+                            hv=r11&0xffff; assert hv in (170,171,18,197)
                             if hv==170:
-                                assert (self.get('r3'),self.get('r4'),self.get('r5'))==(99,2,0)
+                                assert (self.get('r3'),self.get('r4'),self.get('r5'))==(4,2,0)
+                            elif hv==171:
+                                assert (self.get('r3'),self.get('r4'))==(4,2)
+                            elif hv==197:
+                                assert (self.get('r3'),self.get('r4'),self.get('r6'))==(4,2,0)
                             for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
                             for c in range(8): self.put('cr'+str(c),c^5)
                             self.put('lr',0x1028); self.put('ctr',0xdeadc0de); self.put('xer',7)
-                            self.put('r3',getattr(self,'lv1_open_ret',(-17)&MASK) if hv==170 else getattr(self,'lv1_close_ret',0))
+                            if hv==18:
+                                self.put('r4',getattr(self,'lv1_port',0x55)); self.put('r3',getattr(self,'lv1_event_status',0))
+                            elif hv==197:
+                                self.put('r3',getattr(self,'lv1_conn_ret',0))
+                            else:
+                                self.put('r3',getattr(self,'lv1_open_ret',0) if hv==170 else getattr(self,'lv1_close_ret',0))
                             self.pc(pc+4)
                             self.sc1_calls=getattr(self,'sc1_calls',0)+1
                             continue
@@ -358,9 +382,9 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
-            assert m.sc1_calls==1
+            assert getattr(m,'sc1_calls',0)==0 and m.calls.count('repo_enum')==2 and m.calls.count('repo_devid')==2
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
-            assert q[62:]==((-17)&MASK,PROBE_MARK_CLOSE)
+            assert q[62:]==(0x2,0x2)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])
             n=len(m.calls); m.call('shutdown'); assert m.calls[n:]==['original_shutdown']
             m.call('refresh'); assert m.reason_stores==1

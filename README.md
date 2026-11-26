@@ -9,21 +9,21 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 <!-- progress:start -->
 ## Progress
 
-![Project progress 38%](docs/progress.svg)
+![Project progress 40%](docs/progress.svg)
 
-**Overall: about 38%** (effort-weighted estimate; the real risk is not evenly spread).
+**Overall: about 40%** (effort-weighted estimate; the real risk is not evenly spread).
 
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
-| Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 98.0% |
-| Level 1: read sector 16 (ISO9660 signature) | 10% | `██████░░░░` 60% |
+| Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 99.5% |
+| Level 1: read sector 16 (ISO9660 signature) | 10% | `████████░░` 80.0% |
 | Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 15.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-26. 2026-11-26 CONSOLE: bus-99 + A probe SURVIVED, clean XMB return 64s, open_ret=-17 (0x1ffffffef). Hypothesis 1 CONFIRMED: bare li r11,170;sc1 from netemu dispatches correctly once Component A (ability bit) is applied - no LPAR-state-switch wrapper needed. Hypothesis 2 ruled out. Earlier power-offs were missing authorization (no A), not a wrong sc1 mechanism. Next blocker: real open(4,2,0) asserts optical IRQ 9/10 - build Component C (optical IRQ handler in netemu guest kernel). Note: A reverts to stock after a PS2 run (LPAR reconstruction); may need re-assert for multi-step device work. Stock netemu restored+verified._
+_Last update: 2026-11-26. 2026-11-26 CONSOLE BREAKTHROUGH (6 probes, all survived, all via netemu's FORWARDED guest-sc bridge li r11,N; oris r11,r11,0x8000; sc 0 -- NO patch A needed): (4) forwarded bridge dispatches from the injected payload and returns the true LV1 value with no A. (5) open_device(4,2,0) on the REAL optical returns 0 (SUCCESS). (6) construct_event_receive_port(18)-&gt;port 38 + connect_interrupt_event_receive_port(197)=0: optical interrupts route to a guest event port. (7a) repository enumerator (FUN_001e9ba0) finds the storage bus (bus 4). (7b) optical dev_id=2, flash dev_id=4: the optical is a DISTINCT repository storage node on the storage bus. So the optical reads via storage_read(245) (forwarded, no A) like flash -- NOT ATAPI send_device_command(248) (direct sc1, needs A). Full read ABI traced (245-&gt;poll 249-&gt;copy; DMA via 174/176 flags 0xe000000000000800). Next: probe 7c = actual storage_read of LBA 16. Stock netemu restored after every probe._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

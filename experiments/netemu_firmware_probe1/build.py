@@ -15,7 +15,7 @@ TEMPLATE=ROOT/'experiments/netemu_autoreturn'
 LLVM=Path('C:/Program Files/LLVM/bin')
 ELF_SHA='63f12b7e00959c758f8aedfd23d1b8bc78e8ae7d922048e4765aaaef1dbbc6d3'
 SELF_SHA='bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a'
-SLOT,END,CSTART=0x4800,0x7ff0,0x4d00
+SLOT,END,CSTART=0x4800,0x7ff0,0x5000
 
 def sha(b): return hashlib.sha256(b).hexdigest()
 def phdrs(b):
@@ -80,7 +80,7 @@ def build():
     linker='''OUTPUT_FORMAT(elf64-powerpc)
 ENTRY(owned_refresh)
 SECTIONS {
- . = 0x4d00;
+ . = 0x5000;
  .text : { *(.text .text.*) }
  .rodata : { *(.rodata .rodata.*) }
  . = ALIGN(8);
@@ -97,6 +97,8 @@ stock_ufs_stat = 0x4980;
 stock_raw_write = 0x49c0;
 stock_ufs_close = 0x4a00;
 native_startup = 0x4b40;
+native_repo_enum = 0x4a40;
+native_repo_devid = 0x4a80;
 native_alloc = 0x4b80;
 irq_save = 0x4bc0;
 irq_restore = 0x4c00;
@@ -104,6 +106,8 @@ read_msr = 0x4c40;
 read_pir = 0x4c50;
 lv1_open_device = 0x4c60;
 lv1_close_device = 0x4ca0;
+lv1_event_rx_port = 0x4ce0;
+lv1_connect_irq_event = 0x4d20;
 '''
     (OUT/'link.ld').write_text(linker)
     run([LLVM/'ld.lld.exe','-m','elf64ppc','-T',OUT/'link.ld','--no-undefined',
@@ -126,7 +130,14 @@ lv1_close_device = 0x4ca0;
              ('native_startup',0x4b40,0xb9d54,0x751280),
              ('native_alloc',0x4b80,0xb9848,0x751280),
              ('irq_save',0x4bc0,0x11a604,0x751280),
-             ('irq_restore',0x4c00,0x11a5f8,0x751280)]
+             ('irq_restore',0x4c00,0x11a5f8,0x751280),
+             # Firmware-route probe 7a/7b: netemu's repository enumerator + dev-id
+             # extractor (read the repository via forwarded sc0 internally; no
+             # hardware). r2=TOC set by the trampoline.
+             # native_repo_enum(bus_type,dev_type,idx,&o1,&o2)->found;
+             # native_repo_devid(o1,o2)->numeric dev_id (the storage_read id arg).
+             ('native_repo_enum',0x4a40,0x1e9ba0,0x751280),
+             ('native_repo_devid',0x4a80,0x1ea1e8,0x751280)]
     listing=[]
     for name,pc,target,toc in entries:
         block,rows=trampoline(pc,target,toc)
@@ -147,13 +158,27 @@ lv1_close_device = 0x4ca0;
         code[pc-SLOT:pc-SLOT+8]=struct.pack('>II',word,0x4e800020)
         listing.extend([dict(address=pc,word=f'{word:08x}',op=name,args=[]),dict(address=pc+4,word='4e800020',op='blr',args=[])])
         syms[name]=pc
-    # Firmware-route probe: LV1 hypercall wrappers. HV sc 1 clobbers LR, CTR, CR,
-    # XER, r0, and r4..r12 (verified in lv1.elf 0x0f60..0x107c), so preserve LR+CR
-    # across sc 1 in a 128-byte frame. Args arrive in r3.. per ELFv2; return in r3.
-    for name,pc,num in [('lv1_open_device',0x4c60,170),('lv1_close_device',0x4ca0,171)]:
+    # Firmware-route probe: LV1 hypercall wrappers via netemu's FORWARDED guest-sc
+    # bridge (li r11,N; oris r11,r11,0x8000; sc 0) -- the exact convention netemu's
+    # own device code uses (e.g. fn_0012be04 HDD open). Riding the bridge means the
+    # call is already authorized by netemu's guest kernel (open_device is whitelisted,
+    # the HDD uses it), so the probe should NOT need the live LV1 patch A that a bare
+    # sc 1 required. We still preserve LR+CR across the sc in a 128-byte frame (the
+    # bridge is a guest call that may clobber volatiles). Args in r3.. (ELFv2); ret r3.
+    for name,pc,num in [('lv1_open_device',0x4c60,170),('lv1_close_device',0x4ca0,171),
+                        ('lv1_connect_irq_event',0x4d20,197)]:
         source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
-                f'li r11,{num}\nsc 1\nld r12,120(r1)\nmtcr r12\naddi r1,r1,128\n'
+                f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nld r12,120(r1)\nmtcr r12\naddi r1,r1,128\n'
                 f'ld r0,16(r1)\nmtlr r0\nblr\n')
+        block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
+        code[pc-SLOT:pc-SLOT+len(block)]=block
+        listing.extend(rows); syms[name]=pc
+    # construct_event_receive_port (18): 0-in; HV returns status r3 + port r4.
+    # The stub returns the PORT (mr r3,r4) so the C payload can feed it to 197.
+    for name,pc,num in [('lv1_event_rx_port',0x4ce0,18)]:
+        source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
+                f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nmr r3,r4\nld r12,120(r1)\nmtcr r12\n'
+                f'addi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
         block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
         code[pc-SLOT:pc-SLOT+len(block)]=block
         listing.extend(rows); syms[name]=pc

@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-26",
-  "note": "2026-11-26 CONSOLE: bus-99 + A probe SURVIVED, clean XMB return 64s, open_ret=-17 (0x1ffffffef). Hypothesis 1 CONFIRMED: bare li r11,170;sc1 from netemu dispatches correctly once Component A (ability bit) is applied - no LPAR-state-switch wrapper needed. Hypothesis 2 ruled out. Earlier power-offs were missing authorization (no A), not a wrong sc1 mechanism. Next blocker: real open(4,2,0) asserts optical IRQ 9/10 - build Component C (optical IRQ handler in netemu guest kernel). Note: A reverts to stock after a PS2 run (LPAR reconstruction); may need re-assert for multi-step device work. Stock netemu restored+verified.",
+  "note": "2026-11-26 CONSOLE BREAKTHROUGH (6 probes, all survived, all via netemu's FORWARDED guest-sc bridge li r11,N; oris r11,r11,0x8000; sc 0 -- NO patch A needed): (4) forwarded bridge dispatches from the injected payload and returns the true LV1 value with no A. (5) open_device(4,2,0) on the REAL optical returns 0 (SUCCESS). (6) construct_event_receive_port(18)->port 38 + connect_interrupt_event_receive_port(197)=0: optical interrupts route to a guest event port. (7a) repository enumerator (FUN_001e9ba0) finds the storage bus (bus 4). (7b) optical dev_id=2, flash dev_id=4: the optical is a DISTINCT repository storage node on the storage bus. So the optical reads via storage_read(245) (forwarded, no A) like flash -- NOT ATAPI send_device_command(248) (direct sc1, needs A). Full read ABI traced (245->poll 249->copy; DMA via 174/176 flags 0xe000000000000800). Next: probe 7c = actual storage_read of LBA 16. Stock netemu restored after every probe.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
@@ -10,12 +10,12 @@
     {
       "name": "Netemu partition talks to the drive (open, DMA map, ATAPI commands)",
       "weight": 20,
-      "done": 98.0
+      "done": 99.5
     },
     {
       "name": "Level 1: read sector 16 (ISO9660 signature)",
       "weight": 10,
-      "done": 60
+      "done": 80.0
     },
     {
       "name": "Disc authentication (likely required for any data read)",
