@@ -1,0 +1,31 @@
+Task (fresh run, self-contained): BUILD a controller-free ps2_netemu PROBE that tests whether the netemu partition can OPEN the optical drive without powering the console off, after external LV1 RAM patches power the BD bridge. This is the "firmware route" of the ps2-netemu-disc project. Workspace: C:\Users\remus\ps2-netemu-disc. Read docs/FIRMWARE_ROUTE_PLAN.md, docs/DISC_READ_WALL.md, docs/OWNED_CONTROL_RESULT.md, docs/P0I_LV1_493_ANALYSIS.md, and experiments/netemu_owned_control/ (README.md, build.py, validate_pc.py, src/owned.c, src/owned.h) FIRST and FULLY before writing code.
+
+## Context (all PROVEN unless marked)
+- ps2_netemu runs as an isolated LV1 guest (PS2_NE_LPAR). During PS2 mode LV2/Cobra are gone; only HDD + hypercalls are reachable.
+- CONSOLE-PROVEN earlier: lv1_open_device(4,2,0) (optical ROM node bus 4 dev 2) from the netemu partition INSTANTLY POWERS OFF the console (P1b). INFERRED cause: (1) PS2_NE_LPAR leaves the BD PCI bridge unpowered (sysmgr_ss vtable +0xc0 stub), (2) netemu has no optical IRQ (9/10) handler, so an unsolicited drive interrupt hits the guest panic vector at 0xf58 (li r3,0x11f; li r11,0xff; sc 1 = lv1_panic -> power off).
+- Two LV1 RAM patches (A: keep optical ability bit; B: make +0xc0 power the bridge via 0x8001decc) are applied EXTERNALLY by the operator before launch (tools/patch_sysmgr_optical.py). You do NOT apply them; assume they are active at test time.
+- CONSOLE-PROVEN owned buffer (experiments/netemu_owned_control): after startup the probe owns a fresh 8192-byte block; data region EA 0x80023500 / LPAR 0x3b23500. Use the owned_control build/validate/snapshot pipeline as the base.
+- The netemu issues LV1 hypercalls via the `sc 1` instruction (20 sites exist in the decrypted ELF local_only/stock.elf). LV1 ABI: hypercall number in r11, args r3..r10, return in r3 (negative = error).
+
+## Required deliverable: experiments/netemu_firmware_probe1/
+Extend netemu_owned_control into a new experiment that, CONTROLLER-FREE and returning cleanly to XMB:
+ 1. COMPONENT C (optical IRQ handler): before opening the device, register a minimal guest interrupt handler / event port for the optical drive IRQ (9/10) in the netemu guest kernel, mirroring how ps2_emu wires IRQ 9 to handler 0x222cc (study the netemu's existing HDD IRQ 0x12 / VUART 2 wiring). The handler must simply acknowledge/consume the interrupt (no work), so an unsolicited drive interrupt does NOT reach the panic vector 0xf58. Fail-open: if anything about the guest IRQ state is not exactly as expected, do nothing and run stock.
+ 2. OPEN TEST: once, after the owned block is obtained and the IRQ handler is installed, issue lv1_open_device(4,2,0) (HV 170) via `sc 1`. Capture the return in the snapshot. If return >= 0, record "opened", wait a bounded interval (so any drive IRQ can fire against the new handler), then lv1_close_device(4,2,0) (HV 171) and capture its return. Do NOT read sectors yet, do NOT set up DMA, do NOT send device commands.
+ 3. SNAPSHOT: extend the OWNSEC1 controller-free snapshot (written to /tmp/netemu_owned_snapshot.bin, which the operator precreates as 65536 zero bytes and pulls over FTP) with: open ret, close ret, a "survived to snapshot" marker, interrupt-fired count from the handler, and the owned-buffer facts already captured. Decoder updated to print these.
+ 4. Keep everything else identical to owned_control's proven, clean auto-return-to-XMB behavior.
+
+## Validation (offline only; you must NOT touch the console 192.168.0.169, never FTP/HTTP it, never run installers)
+ - Reuse the owned_control offline pipeline: compile for PPC64 (clang target powerpc64 ... -Oz), build.py-style store audit (every store inside proven RW ranges only; audit store targets), exact SELF decrypt round-trip, and the exclusive JVM PPC64 validation (validate_pc.py --allow-jvm) extended with cases for the new open/close/IRQ paths (model the sc 1 hypercalls and the IRQ handler entry). Code size must stay under the slot budget.
+ - Write experiments/netemu_firmware_probe1/README.md and a report with: exact stock bytes/addresses you hook, the guest IRQ wiring you found and how you register the handler (cite addresses in stock.elf), the sc 1 call sites and ABI you used, store audit result, SELF sha256, and a HONEST risks section (this is INFERRED; opening the live drive may still power off; the handler may be insufficient).
+ - Produce the signed SELF at local_only/firmware_probe1/ps2_netemu_firmware_probe1.self (gitignored). Do NOT install it.
+
+## Rules (hard)
+ - NEVER contact the PS3 (192.168.0.169): no HTTP, no FTP, no webMAN, no installer, no poke.lv1. Build + validate on the PC only. The operator runs the console test.
+ - NEVER write /dev_flash. Only produce a ps2_netemu.self. Keep every build FAIL-OPEN: if any precondition is not exactly as expected, do nothing and let stock behavior run.
+ - Audit every store target on the PC; no store outside proven RW ranges (a store into RO memory powers the console off). Keep writes inside the proven mailbox / owned-block ranges and the stack.
+ - Sony-derived files (stock.elf, the .self, decrypted binaries) stay in local_only/ (gitignored); never commit or upload them.
+ - Do NOT git commit/push/tag. Do NOT launch games or PCSX2. Do NOT kill processes. Do NOT simulate input or take screenshots.
+ - If you hit a usage limit, save progress and a clear "resume here" note in the experiment README; the operator will relaunch.
+
+## Report back at the end
+ - What you built, the exact hooks/addresses, store-audit + JVM validation results (PASS/FAIL counts), the SELF sha256, the precise console-test steps for the operator (precreate snapshot file, apply A+B via tools/patch_sysmgr_optical.py --apply, install probe, launch Buzz carrier controller-free, FTP+decode snapshot, restore stock), and the honest risks. Be explicit about anything you could not finish.

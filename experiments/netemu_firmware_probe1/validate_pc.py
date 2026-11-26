@@ -10,13 +10,14 @@ import hashlib, json, os, struct, sys, traceback
 sys.dont_write_bytecode=True
 ROOT=Path(__file__).resolve().parents[2]
 HERE=Path(__file__).resolve().parent
-OUT=ROOT/'local_only/owned_control'
+OUT=ROOT/'local_only/firmware_probe1'
 H,T,E,P=0x2446560,0x2446598,0x80000000,0x03b00000
 PAYLOAD=E+0x20000
 MAIL,REASON,SP,STOP,TOC=0x930f20,0x934161,0xaaa7013fcf0,0x7ff0,0x751280
 MASK=(1<<64)-1; BUSY=1<<63; META_SIZE=0x10048; DELAY=20*79800000
 MAGIC=0x4f574e3100000000
 STOCK_SHA='63f12b7e00959c758f8aedfd23d1b8bc78e8ae7d922048e4765aaaef1dbbc6d3'
+PROBE_MARK_CLOSE=0x4255533939534146
 REPORT={}
 def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def dump(name,obj): (OUT/name).write_text(json.dumps(obj,indent=2)+'\n')
@@ -24,7 +25,7 @@ def dump(name,obj): (OUT/name).write_text(json.dumps(obj,indent=2)+'\n')
 def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
     global REPORT
     review=json.loads((OUT/'build_review.json').read_text())
-    elf=OUT/'ps2_netemu_owned_control.elf'
+    elf=OUT/'ps2_netemu_firmware_probe1.elf'
     assert sha(elf)==review['elf_sha256'] and sha(ROOT/'local_only/stock.elf')==STOCK_SHA
     for name,digest in review['source_inputs'].items(): assert sha(ROOT/name)==digest,(name,'changed since build')
     REPORT=dict(status='RUNNING',elf_sha256=sha(elf),cases=[],calls=[],jvm_done=False,
@@ -33,11 +34,12 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
         'BC16C after relocated prologue and 11B9BC original bodies; hostile ABI volatile clobbers.',
         'mfmsr/mfspr088 leaves and mftb return synthetic values. Leaves verified bytes; no MSR write executes.',
         '11A608/11A5FC sc intercepted with verified privileged trap5/6 semantics and exact nested tokens.',
+        'HV sc 1 intercepted with lv1.elf volatile clobbers (LR=0x1028, CTR, XER, CR0..7, r0, r4..r12); wrapper prologue/epilogue execute natively.',
         'Native UFS open/stat/write/close are instant boundary models, not native HDD or scheduling.'])
     gate=json.loads((ROOT/'local_only/private_staging_review/helper_gate.json').read_text())
     helper_path=list(map(lambda x:int(x,16),gate['single_bank_gate']['helper_path_pcs']))
     with pyghidra.open_program(str(elf),project_location=str(OUT/'pc/projects'),
-            project_name='owned_'+review['elf_sha256'][:12],analyze=False,language='PowerPC:BE:64:default') as flat:
+            project_name='fwprobe1_'+review['elf_sha256'][:12],analyze=False,language='PowerPC:BE:64:default') as flat:
         program=flat.getCurrentProgram(); space=program.getAddressFactory().getDefaultAddressSpace()
         class Machine:
             def __init__(self,snapshot=None,irq=0x9032,pir=0x80000000):
@@ -139,7 +141,8 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                         if native: self.nativewrites+=1
                         else: self.payloadwrites+=1
                     if self.owned(a,width):
-                        assert not native and self.native_return is not None and not self.irq&0x8000
+                        probe_slot=(a-self.allocations[0][0]) in (176,184,192) and width==8
+                        assert not native and self.native_return is not None and (probe_slot or not self.irq&0x8000)
                         self.heapwrites+=1
                     if a==REASON:
                         assert self.phase()==3 and self.get('r'+str(rt))&255==2 and self.rd(REASON,1)==bytes([0])
@@ -209,11 +212,6 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                         assert self.rd(pc,8)==bytes.fromhex('7c6000a64e800020' if pc==0x4c40 else '7c6822a64e800020')
                         # Model only mfmsr/mfspr instruction, execute its blr natively.
                         self.put('r3',self.irq if pc==0x4c40 else self.pir); self.pc(pc+4); continue
-                    if pc in (0x4c60,0x4c78):
-                        # Firmware-route probe LV1 hypercall leaf stubs: li r11,HV; sc 1; blr.
-                        assert self.rd(pc,12)==bytes.fromhex('396000aa440000224e800020' if pc==0x4c60 else '396000ab440000224e800020')
-                        self.put('r3',getattr(self,'lv1_open_ret',0) if pc==0x4c60 else getattr(self,'lv1_close_ret',0))
-                        self.pc(pc+8); continue
                     if pc==0xb9cd0:
                         assert kind=='refresh' and original==1 and self.get('r2')==TOC and not self.depth
                         self.calls.append('clock')
@@ -235,7 +233,8 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             ptr=self.get('r5'); assert self.stack(ptr,512)
                             sec=self.rd(ptr,512); q=struct.unpack('>64Q',sec)
                             assert q[0:2]==(0x4f574e5345433100,0x1000000000200) and q[4:7]==(0xb46100,2,expected)
-                            assert q[8:20]==tuple(self.state()) and q[62:]==(0,0)
+                            expected_probe=(getattr(self,'lv1_open_ret',(-17)&MASK)&MASK,PROBE_MARK_CLOSE) if (q[2]>>32)==1 else (0,0)
+                            assert q[8:20]==tuple(self.state()) and q[62:]==expected_probe
                             self.sectors.append(sec); self.ret(self.write_rc)
                         else: assert self.get('r3')==self.fd; self.ret(self.close_rc)
                         continue
@@ -258,6 +257,17 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                         helper.append(pc)
                     w=int.from_bytes(self.rd(pc,4),'big'); op=w>>26
                     if op==17:
+                        if w==0x44000022 and 0x4c60<=pc<0x4d00:
+                            hv=self.get('r11'); assert hv in (170,171)
+                            if hv==170:
+                                assert (self.get('r3'),self.get('r4'),self.get('r5'))==(99,2,0)
+                            for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
+                            for c in range(8): self.put('cr'+str(c),c^5)
+                            self.put('lr',0x1028); self.put('ctr',0xdeadc0de); self.put('xer',7)
+                            self.put('r3',getattr(self,'lv1_open_ret',(-17)&MASK) if hv==170 else getattr(self,'lv1_close_ret',0))
+                            self.pc(pc+4)
+                            self.sc1_calls=getattr(self,'sc1_calls',0)+1
+                            continue
                         assert pc in (0x11a608,0x11a5fc) and w==0x44000002
                         old=self.irq; assert not old&0x4000
                         if pc==0x11a608:
@@ -348,7 +358,9 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
+            assert m.sc1_calls==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
+            assert q[62:]==((-17)&MASK,PROBE_MARK_CLOSE)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])
             n=len(m.calls); m.call('shutdown'); assert m.calls[n:]==['original_shutdown']
             m.call('refresh'); assert m.reason_stores==1
@@ -545,7 +557,8 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             instructions=sum(c['steps'] for c in REPORT['calls']),
             fresh_allocator_calls=sum(c['allocator_calls'] for c in REPORT['calls']),
             trap_intercepts=sum(len(c['traps']) for c in REPORT['calls']),
-            real_sc_executed=0)
+            real_sc_executed=0,
+            modeled_sc1_intercepted=True)
         dump('pc_results.json',REPORT)
         print('COMPLETE',REPORT['counts'],flush=True)
 

@@ -166,7 +166,7 @@ def audit_assembly(path,trampolines):
     for row in trampolines:
         if row['op'].startswith('st'):
             assert (row['op'],*row['args']) in [
-                ('std','r0','16(r1)'),('std','r2','120(r1)'),('std','r0','96(r1)'),
+                ('std','r0','16(r1)'),('std','r2','120(r1)'),('std','r12','120(r1)'),('std','r0','96(r1)'),
                 ('stdu','r1','-128(r1)'),('stdu','r1','-320(r1)')],row
     result=dict(status='PASS_ALL_STORE_WORDS_MATCH_BOUNDED_IR_TRANSLATION',stores=stores,frames=frames,
         scope='Every compiler assembly store is operand-encoded against its linked PPC instruction word; wrapper stores restricted separately. IR supplies pointer bounds. Actual execution separately fences native metadata, payload-owned ranges, mailbox/reason and stack.')

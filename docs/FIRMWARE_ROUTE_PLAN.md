@@ -166,3 +166,39 @@ So two live hypotheses remain, not settled:
 Run this bus-99+A probe (no bridge/B needed, no device touched) once the console
 is recoverable; it is the cheapest discriminator and should not power off under
 hypothesis 1.
+
+## CONSOLE RESULT: bus-99 + A probe — SURVIVED, HYPOTHESIS 1 CONFIRMED (2026-11-26)
+
+A applied alone (0x119334 7c004838->60000000, verified; B left STOCK), stock-
+backed probe SELF `8ea6717f` installed, Buzz carrier launched controller-free.
+**Clean XMB return at 64 s, no power-off.** Snapshot decoded:
+- `probe_open_ret = 0x1ffffffef` = **-17** (LV1_NO_BUS) — the real LV1 return for
+  a nonexistent bus, NOT a panic.
+- `probe_close_ret = 0x4255533939534146` ("BUS99SAF", close skipped since open<0).
+- pattern_pass true, owned block intact, UFS snapshot written.
+
+**Interpretation (settles the two hypotheses):** a bare `li r11,170; sc 1` from
+the netemu partition is dispatched correctly and returns the true LV1 value once
+**Component A (ability bit) is applied** — no PHAT-style LPAR-state-switch wrapper
+is needed. The earlier power-offs were the MISSING authorization, not a wrong sc 1
+mechanism: probe 3 (bus 99, NO A) powered off because the LPAR is not authorized
+for HV 170 without A; this run (bus 99, A) survived. So **hypothesis 2 is ruled
+out**; the sc 1 forwarding path is fine.
+
+**Remaining blocker for the real open(4,2,0):** the optical DEVICE CLAIM. With A
+the hypercall dispatches; the real drive open still asserts IRQ 9/10 which the
+netemu guest kernel does not handle -> guest panic vector 0xf58 -> lv1_panic ->
+power-off. **Component C (optical IRQ 9/10 handler / event-port in the netemu
+guest kernel, mirror ps2_emu IRQ 9 -> 0x222cc) is the next build.** Then re-run
+the open probe at bus 4 with A (+ B for bridge power) and C present.
+
+**Observed side-note (affects multi-step device work):** patch A reverted to
+STOCK by itself after the PS2 carrier run returned (read back 7c004838 post-run,
+having been verified 60000000 before). The PS2 emulator entry/teardown appears to
+reconstruct PS2_NE_LPAR and re-run the ability-strip. A is still live at the
+cold-start moment the probe fires (proven by survival), but a build that needs A
+across a longer device sequence may have to re-assert it, or the strip site must
+be patched in a form that survives LPAR reconstruction. UNKNOWN which; revisit for
+Component C/D.
+
+End state: stock netemu restored+verified (bad3e45c), A stock, console at XMB 75 W.

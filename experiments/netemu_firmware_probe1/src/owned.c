@@ -126,9 +126,12 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
          * sysmgr_ss LV1 patches; without them this open powers the console off
          * (that is the test). No DMA, no read, no device command here. */
         if (status==OWNED && alloc) {
-            u64 oret=lv1_open_device(4,2,0);
-            u64 cret=((s64)oret>=0)?lv1_close_device(4,2):0xd1edULL;
-            probe_store(alloc,oret,cret);
+            /* PROBE 3: SAFE DIAGNOSTIC. bus=99 (>=5) returns -17 (LV1_NO_BUS)
+             * WITHOUT touching hardware, so no power-off. Confirms the sc 1
+             * hypercall path + snapshot capture end to end. Expect oret=-17
+             * (0x1ffffffef). cret sentinel = "BUS99SAF". */
+            u64 oret=lv1_open_device(99,2,0);
+            probe_store(alloc,oret,0x4255533939534146ULL);
         }
     }
     if (!empty()) return result;

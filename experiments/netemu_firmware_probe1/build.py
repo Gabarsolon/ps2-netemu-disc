@@ -103,7 +103,7 @@ irq_restore = 0x4c00;
 read_msr = 0x4c40;
 read_pir = 0x4c50;
 lv1_open_device = 0x4c60;
-lv1_close_device = 0x4c78;
+lv1_close_device = 0x4ca0;
 '''
     (OUT/'link.ld').write_text(linker)
     run([LLVM/'ld.lld.exe','-m','elf64ppc','-T',OUT/'link.ld','--no-undefined',
@@ -147,15 +147,16 @@ lv1_close_device = 0x4c78;
         code[pc-SLOT:pc-SLOT+8]=struct.pack('>II',word,0x4e800020)
         listing.extend([dict(address=pc,word=f'{word:08x}',op=name,args=[]),dict(address=pc+4,word='4e800020',op='blr',args=[])])
         syms[name]=pc
-    # Firmware-route probe: LV1 hypercall leaf stubs. li r11,HV ; sc 1 ; blr.
-    # Args arrive in r3.. per the C ABI; return in r3. No store words here.
-    for name,pc,num in [('lv1_open_device',0x4c60,170),('lv1_close_device',0x4c78,171)]:
-        w0=0x39600000|(num&0xffff)
-        code[pc-SLOT:pc-SLOT+12]=struct.pack('>III',w0,0x44000022,0x4e800020)
-        listing.extend([dict(address=pc,word=f'{w0:08x}',op='li',args=['r11',str(num)]),
-                        dict(address=pc+4,word='44000022',op='sc',args=['1']),
-                        dict(address=pc+8,word='4e800020',op='blr',args=[])])
-        syms[name]=pc
+    # Firmware-route probe: LV1 hypercall wrappers. HV sc 1 clobbers LR, CTR, CR,
+    # XER, r0, and r4..r12 (verified in lv1.elf 0x0f60..0x107c), so preserve LR+CR
+    # across sc 1 in a 128-byte frame. Args arrive in r3.. per ELFv2; return in r3.
+    for name,pc,num in [('lv1_open_device',0x4c60,170),('lv1_close_device',0x4ca0,171)]:
+        source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
+                f'li r11,{num}\nsc 1\nld r12,120(r1)\nmtcr r12\naddi r1,r1,128\n'
+                f'ld r0,16(r1)\nmtlr r0\nblr\n')
+        block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
+        code[pc-SLOT:pc-SLOT+len(block)]=block
+        listing.extend(rows); syms[name]=pc
     aa=auditors['audit_assembly'](OUT/'payload_compiler.s',listing)
     # Own stack frames/trampolines are small compared with the traced 256KiB
     # control stack. Native helper depth/liveness retain their stock behavior.
