@@ -1,7 +1,24 @@
 # Servo power-button pusher (automatic PS3 power-on/off)
 
-Status 2026-11-24: parts ordered, nothing built or tested yet.
+Status 2026-11-26: built, mounted, power-on PROVEN.
 Labels: PROVEN / INFERRED / UNKNOWN / ESTIMATE, as in the rest of the docs.
+
+## As built (2026-11-26)
+
+- Pico 2 H on PC USB, MicroPython v1.29.0, `pico-servo/main.py`.
+- One SG90 (only one arrived from the 2-pack), taped in place. Wiring as below.
+- Calibration: `rest=0` (neutral), `press=45`. Slow movement, 20 ms per degree.
+- **PROVEN:** `python tools/ps3_power_button.py on` booted the console from
+  standby.
+- **Owner decision:** the servo only powers on. Force-off is the Wi-Fi smart
+  plug. The 10 s hold (`off`, `recover` in `ps3_power_button.py`) was never
+  tested; do not use it.
+- Automatic use: `python tools/ps3_auto.py recover`, see
+  [AUTOMATION.md](AUTOMATION.md) "Automatic power recovery".
+- Calibrate from the keyboard: `python tools/servo_jog.py` (quit it afterwards,
+  it holds the serial port).
+
+The sections below are the planning record from before the build.
 
 ## Goal
 

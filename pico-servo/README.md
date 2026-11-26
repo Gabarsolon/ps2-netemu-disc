@@ -4,7 +4,8 @@ A Raspberry Pi Pico 2 H running MicroPython drives one SG90 servo that
 presses the PS3 front power button. The PC sends line commands over USB serial.
 Full background and decisions: `docs/SERVO_POWER_BUTTON.md`.
 
-Status 2026-11-24: code written, **not yet run on hardware** (servos arriving).
+Status 2026-11-26: running on hardware; power-on **PROVEN**. The servo is only
+used to power on (force-off is the smart plug, see `docs/AUTOMATION.md`).
 
 ## Wiring (no soldering)
 
@@ -37,21 +38,23 @@ Mount the servo (lying flat on a heavy block, arm swinging horizontally into
 the button, soft tip, away from the eject button). Then:
 
 ```
-python tools/ps3_power_button.py angle 90     # find a rest angle just clear of the button
-python tools/ps3_power_button.py angle 70     # find the angle that clicks the button
-python tools/ps3_power_button.py set rest 90
-python tools/ps3_power_button.py set press 70
-python tools/ps3_power_button.py rest
+python tools/servo_jog.py     # a/d 5 deg, z/c 1 deg, r save rest, p save press, q quit
 ```
 
+Current setup: `rest=0` (neutral), `press=45`, also the firmware defaults.
+Movement is slow (20 ms per degree, `STEP_MS`). After a Pico reboot the first
+move jumps to rest, then ramps.
+
 Pick the press angle that just clicks the button, not further: the servo should
-not stall against the case.
+not stall against the case. Every click really presses the PS3 button.
 
 ## Use
 
 ```
 python tools/ps3_power_button.py status        # console state + calibration
 python tools/ps3_power_button.py on            # only if the console looks OFF
-python tools/ps3_power_button.py off --yes     # 10 s force-off hold
-python tools/ps3_power_button.py recover --yes # off, then on, then wait for webMAN
+python tools/ps3_auto.py recover               # smart-plug cut, auto-boot, else servo
 ```
+
+`off --yes` and `recover --yes` of `ps3_power_button.py` (10 s button hold) were
+never tested and are not used.

@@ -20,10 +20,11 @@ from machine import PWM, Pin
 
 SERVO_PIN = 15
 MIN_US, MAX_US = 500, 2400          # SG90 pulse range for ~0..180 deg
-TRAVEL_MS = 450                     # time for a full move before PWM off
+TRAVEL_MS = 450                     # settle time before PWM off
+STEP_MS = 20                        # ms per degree: slow, gentle movement
 CAL_FILE = 'cal.json'
 
-cal = {'rest': 90, 'press': 60}
+cal = {'rest': 0, 'press': 45}      # 0 = neutral, 45 = presses the button
 try:
     with open(CAL_FILE) as f:
         cal.update(json.load(f))
@@ -32,6 +33,7 @@ except (OSError, ValueError):
 
 led = Pin('LED', Pin.OUT)
 pwm = None
+pos = None                          # last commanded angle; unknown after boot
 
 
 def pulse_ns(deg):
@@ -40,11 +42,19 @@ def pulse_ns(deg):
 
 
 def move(deg):
-    global pwm
+    """Ramp slowly to deg. After boot the arm is assumed to be at rest."""
+    global pwm, pos
     if pwm is None:
         pwm = PWM(Pin(SERVO_PIN))
         pwm.freq(50)
-    pwm.duty_ns(pulse_ns(deg))
+    if pos is None:
+        pos = cal['rest']
+    pwm.duty_ns(pulse_ns(pos))
+    step = 1 if deg > pos else -1
+    while pos != deg:
+        pos += step
+        pwm.duty_ns(pulse_ns(pos))
+        time.sleep_ms(STEP_MS)
 
 
 def release():

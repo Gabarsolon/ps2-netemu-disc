@@ -36,7 +36,7 @@ async def main():
         print("plug unreachable, HTTP-only mode:",str(e)[:40],flush=True)
     async def watt():
         if plug is None: return -1
-        try: return (await asyncio.wait_for(plug.get_energy_usage(),timeout=6)).current_power
+        try: return (await asyncio.wait_for(plug.get_energy_usage(),timeout=6)).current_power/1000  # mW -> W
         except Exception: return -1
     t0=time.time()
     print(f"start W={await watt()} http={http_up()}",flush=True)

@@ -59,7 +59,8 @@ def watts():
     async def read():
         client = ApiClient(cfg['email'], cfg['password'])
         plug = await asyncio.wait_for(client.p115(cfg['ip']), timeout=8)
-        return (await asyncio.wait_for(plug.get_energy_usage(), timeout=6)).current_power
+        # get_energy_usage() reports current_power in milliwatts.
+        return (await asyncio.wait_for(plug.get_energy_usage(), timeout=6)).current_power / 1000
     try:
         return asyncio.run(read())
     except Exception:
@@ -93,7 +94,7 @@ class Servo:
         time.sleep(0.2)
         self.ser.reset_input_buffer()
 
-    def send(self, command, timeout=3.0):
+    def send(self, command, timeout=6.0):   # a slow 180 deg move takes ~4 s
         self.ser.write((command + '\r\n').encode())
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -133,10 +134,10 @@ def main():
     servo = Servo(a.port)
     if a.command == 'press':
         ms = int(a.args[0]) if a.args else 300
-        print(servo.send(f'PRESS {ms}', timeout=ms / 1000 + 3))
+        print(servo.send(f'PRESS {ms}', timeout=ms / 1000 + 9))
     elif a.command == 'hold':
         ms = int(a.args[0]) if a.args else 10000
-        print(servo.send(f'HOLD {ms}', timeout=ms / 1000 + 3))
+        print(servo.send(f'HOLD {ms}', timeout=ms / 1000 + 9))
     elif a.command == 'angle':
         print(servo.send(f'ANGLE {int(a.args[0])}'))
     elif a.command == 'set':
@@ -151,7 +152,7 @@ def main():
         if state == 'OFF':
             print('already OFF, no hold')
         else:
-            print(servo.send('HOLD 10000', timeout=14))
+            print(servo.send('HOLD 10000', timeout=19))
             off = wait_for(lambda: console_state()[0] == 'OFF', 30)
             print('console OFF' if off else 'WARNING: console did not reach OFF within 30 s')
             if not off:
@@ -163,7 +164,7 @@ def main():
         if state != 'OFF':
             raise SystemExit(f'Refusing to press: console looks {state} (http={up}, watts={w}); '
                              'a press would turn a running PS3 off.')
-        print(servo.send('PRESS 300', timeout=4))
+        print(servo.send('PRESS 300', timeout=9))
         ok = wait_for(http_up, 120, step=4)
         print('webMAN online: console booted' if ok else 'WARNING: webMAN not online after 120 s')
         return 0 if ok else 1
