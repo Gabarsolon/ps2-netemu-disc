@@ -148,21 +148,32 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
              * 310100 = 01 "CD001" 01 on a valid PS2 disc). w1 = (map_ret<<48)|result.
              * lpar_scratch = p+(alloc-e)+0x200 must sit in netemu's DMA window
              * (< 0x3ffffff; the owned block does). Fail-open at each nonzero step. */
+            /* PROBE 7f: map(176) returned -17 (LV1_ILLEGAL_PARAMETER_VALUE) in 7d/7e
+             * because the DMA target was not PAGE-ALIGNED. The 8KB owned block cannot
+             * host a page-aligned buffer clear of its integrity patterns, and the
+             * allocator caps allocations (native_alloc(0x3000) returns 0). So DMA into
+             * FREE POOL RAM past the owned block: ea2 = (alloc+0x4000)&~0xfff is
+             * page-aligned, inside the 0x40000 LPAR pool, in netemu's DMA window
+             * (< 0x3ffffff), and not handed out by the allocator -- so the owned block
+             * and its snapshot machinery stay fully intact. alloc+map 0x1000 (sizes
+             * matched) -> storage_read LBA 16 -> poll -> read back via Q(ea2). w0 =
+             * sector first 8 bytes (expect 0x0143443030310100 = 01 "CD001" 01). */
             u64 o1=0,o2=0;
             u64 of=(u64)(native_repo_enum(5,5,0,&o1,&o2)&0xff);
             u64 bus=of?native_repo_busid(o1):0;
             u64 dev=of?native_repo_devid(o1,o2):0;
             u64 data8=0, w1=PROBE_NOCLOSE;
             if (of && lv1_open_device(bus,dev,0)==0) {
-                u64 dma=lv1_alloc_dma(bus,dev,0x100000,0x14,0);
+                u64 dma=lv1_alloc_dma(bus,dev,0x1000,0xC,0);   /* 4KB io_pagesize (0xC), fits the 256KB pool */
                 if (dma) {
-                    u64 lpar_scratch=p+(alloc-e)+0x200;
-                    u64 mret=lv1_map_dma(bus,dev,lpar_scratch,dma,0x100000,0xe000000000000800ULL);
+                    u64 ea2=(alloc+0x4000)&~0xfffULL;        /* page-aligned free pool RAM */
+                    u64 lpar2=p+(ea2-e);
+                    u64 mret=lv1_map_dma(bus,dev,lpar2,dma,0x1000,0xe000000000000800ULL);
                     if (mret==0) {
                         u64 tag=lv1_storage_read(dev,2,16,1,4,dma); (void)tag;
                         u64 res=0xffffffffffffffffULL;
                         for (u32 i=0;i<200;++i) { res=lv1_get_async_status(dev); if ((res&0xffffff)==0) break; }
-                        data8=Q(alloc+0x200);
+                        data8=Q(ea2);
                         w1=(mret<<48)|(res&0xffffffffffffULL);
                     } else w1=(mret<<48)|0xBAD;
                 }

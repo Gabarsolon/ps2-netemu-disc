@@ -1,6 +1,6 @@
 {
-  "updated": "2026-11-26",
-  "note": "2026-11-26 probe 7d/7e: the FULL optical read chain runs on console and SURVIVES (open(4,2,0)=0 -> allocate_device_dma_region(174)=0xc0000000 -> map_device_dma_region(176) -> storage_read(245) -> poll get_async_status(249)), all forwarded sc0, no patch A. BLOCKER: map(176) returns -17 = LV1_ILLEGAL_PARAMETER_VALUE (size 0x100000 ruled out in 7e). Cause: the DMA target buffer must be PAGE-ALIGNED (0x1000) guest-physical, but the 8KB owned block (base 0x80022440, unaligned) cannot host a page-aligned 2KB+ buffer clear of the integrity-checked command/data patterns that gate snapshot delivery. FIX (probe 7f): dedicated page-aligned DMA buffer -- enlarge the owned allocation (N 0x2000->0x4000, DMA page at (alloc+0x2000)&~0xfff, past the patterns) or a separate page-aligned region. map(176) arg order proven: r3=bus,r4=dev,r5=lpar_addr(page-aligned),r6=dma_region,r7=size,r8=flags 0xe000000000000800.",
+  "updated": "2026-11-27",
+  "note": "2026-11-27 PROBE 7f: THE FULL OPTICAL READ CHAIN SUCCEEDS on console. open(4,2,0)=0 -> allocate_device_dma_region(174, io_pagesize 0xC=4KB) -> map_device_dma_region(176)=0 (page-aligned free-pool DMA buffer; the 0xC pagesize + page-alignment were the fixes) -> storage_read(245) LBA 16 -> poll get_async_status(249) result=0 (COMPLETE). All forwarded sc0, no patch A, survived. Remaining: the readback Q(ea2)=0 despite result=0 -- likely DMA cache-coherency (stale CPU cache line; netemu copies via FUN_00118a90) or disc-ready/LBA. Next (7g): cache flush/invalidate before readback or use netemu's copy helper.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
@@ -15,7 +15,7 @@
     {
       "name": "Level 1: read sector 16 (ISO9660 signature)",
       "weight": 10,
-      "done": 80.0
+      "done": 92.0
     },
     {
       "name": "Disc authentication (likely required for any data read)",

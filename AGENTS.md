@@ -79,6 +79,15 @@ purchased or tested during that discussion.
 - **Do not ask questions; always pick the recommended option** (the best option
   by your judgment) and proceed. Reserve questions for crossing a hard safety
   boundary only.
+- **NEVER STOP UNTIL THE GOAL IS REACHED — BOOT TDU.** The goal is booting the
+  inserted physical TDU disc (SLES_544.66) through the firmware route. Do NOT pause,
+  hand back, checkpoint-and-wait, or ask "should I continue / is this a good stopping
+  point" — keep working across power-offs, setbacks, failed probes and structural
+  blockers until the disc boots. A blocker is a thing to push through, not a reason to
+  stop. Report progress while continuing, never instead of continuing. Reserve stopping
+  ONLY for a hard safety boundary (a `/dev_flash` write, a destructive/irreversible
+  outward action needing confirmation). The agy prompt-invocation quirk, the owned-block
+  integrity machinery, DMA buffer geometry — all are obstacles to solve, not stops.
 - **FIRMWARE ROUTE AUTHORIZED.** The owner authorized patching the hypervisor /
   secure modules (`sysmgr_ss`/LV1) to let the netemu partition reach the optical
   drive, accepting the brick/power-off risk. Implementation stays on **live LV1

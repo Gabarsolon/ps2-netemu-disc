@@ -9,21 +9,21 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 <!-- progress:start -->
 ## Progress
 
-![Project progress 40%](docs/progress.svg)
+![Project progress 41%](docs/progress.svg)
 
-**Overall: about 40%** (effort-weighted estimate; the real risk is not evenly spread).
+**Overall: about 41%** (effort-weighted estimate; the real risk is not evenly spread).
 
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
 | Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 99.8% |
-| Level 1: read sector 16 (ISO9660 signature) | 10% | `████████░░` 80.0% |
+| Level 1: read sector 16 (ISO9660 signature) | 10% | `█████████░` 92.0% |
 | Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 15.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-26. 2026-11-26 probe 7d/7e: the FULL optical read chain runs on console and SURVIVES (open(4,2,0)=0 -&gt; allocate_device_dma_region(174)=0xc0000000 -&gt; map_device_dma_region(176) -&gt; storage_read(245) -&gt; poll get_async_status(249)), all forwarded sc0, no patch A. BLOCKER: map(176) returns -17 = LV1_ILLEGAL_PARAMETER_VALUE (size 0x100000 ruled out in 7e). Cause: the DMA target buffer must be PAGE-ALIGNED (0x1000) guest-physical, but the 8KB owned block (base 0x80022440, unaligned) cannot host a page-aligned 2KB+ buffer clear of the integrity-checked command/data patterns that gate snapshot delivery. FIX (probe 7f): dedicated page-aligned DMA buffer -- enlarge the owned allocation (N 0x2000-&gt;0x4000, DMA page at (alloc+0x2000)&amp;~0xfff, past the patterns) or a separate page-aligned region. map(176) arg order proven: r3=bus,r4=dev,r5=lpar_addr(page-aligned),r6=dma_region,r7=size,r8=flags 0xe000000000000800._
+_Last update: 2026-11-27. 2026-11-27 PROBE 7f: THE FULL OPTICAL READ CHAIN SUCCEEDS on console. open(4,2,0)=0 -&gt; allocate_device_dma_region(174, io_pagesize 0xC=4KB) -&gt; map_device_dma_region(176)=0 (page-aligned free-pool DMA buffer; the 0xC pagesize + page-alignment were the fixes) -&gt; storage_read(245) LBA 16 -&gt; poll get_async_status(249) result=0 (COMPLETE). All forwarded sc0, no patch A, survived. Remaining: the readback Q(ea2)=0 despite result=0 -- likely DMA cache-coherency (stale CPU cache line; netemu copies via FUN_00118a90) or disc-ready/LBA. Next (7g): cache flush/invalidate before readback or use netemu's copy helper._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

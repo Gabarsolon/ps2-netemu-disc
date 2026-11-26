@@ -81,8 +81,8 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             def owned(self,a,n): return any(lo<=a and a+n<=lo+size for lo,size in self.allocations)
             def payload_region(self,a,n):
                 for lo,size in self.allocations:
-                    c=(lo+0x107f)&~127;d=c+128
-                    if any(x<=a and a+n<=x+length for x,length in [(lo,4096),(c,64),(d,2048)]):return True
+                    c=(lo+0x107f)&~127;d=c+128;dma=(lo+0x4000)&~0xfff
+                    if any(x<=a and a+n<=x+length for x,length in [(lo,4096),(c,64),(d,2048),(dma,0x1000)]):return True
                 return False
             def stack(self,a,n): return SP-8192<=a and a+n<=SP+32
             def allowed_store(self,a,n,native):
@@ -156,7 +156,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                         # Any admission/bank read in startup requires the OUTER save.
                         if self.kind=='startup': assert self.depth and not self.irq&0xc000,('unprotected metadata read',hex(pc))
                     if E<=a<E+0x100000:
-                        assert self.owned(a,width),('heap read before ownership / invalid ptr',hex(pc),hex(a))
+                        assert self.owned(a,width) or self.payload_region(a,width),('heap read before ownership / invalid ptr',hex(pc),hex(a))
                         self.heapreads+=1
                     # CPU reads of an LPAR value as pointer are forbidden.
                     assert not (P<=a<P+0x100000),('LPAR dereference',hex(pc),hex(a))
@@ -289,9 +289,9 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             elif hv==197:
                                 assert (self.get('r3'),self.get('r4'),self.get('r6'))==(4,2,0)
                             elif hv==174:
-                                assert (self.get('r3'),self.get('r4'),self.get('r5'),self.get('r6'),self.get('r7'))==(4,2,0x100000,0x14,0)
+                                assert (self.get('r3'),self.get('r4'),self.get('r5'),self.get('r6'),self.get('r7'))==(4,2,0x1000,0xC,0)
                             elif hv==176:
-                                assert (self.get('r3'),self.get('r4'))==(4,2) and self.get('r7')==0x100000 and self.get('r8')==0xe000000000000800
+                                assert (self.get('r3'),self.get('r4'))==(4,2) and self.get('r7')==0x1000 and self.get('r8')==0xe000000000000800
                             elif hv==245:
                                 assert (self.get('r3'),self.get('r4'),self.get('r5'),self.get('r6'),self.get('r7'))==(2,2,16,1,4)
                             elif hv==249:
