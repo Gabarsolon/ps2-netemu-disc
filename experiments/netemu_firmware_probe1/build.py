@@ -99,6 +99,7 @@ stock_ufs_close = 0x4a00;
 native_startup = 0x4b40;
 native_repo_enum = 0x4a40;
 native_repo_devid = 0x4a80;
+native_repo_busid = 0x4d60;
 native_alloc = 0x4b80;
 irq_save = 0x4bc0;
 irq_restore = 0x4c00;
@@ -108,6 +109,10 @@ lv1_open_device = 0x4c60;
 lv1_close_device = 0x4ca0;
 lv1_event_rx_port = 0x4ce0;
 lv1_connect_irq_event = 0x4d20;
+lv1_alloc_dma = 0x4da0;
+lv1_map_dma = 0x4de0;
+lv1_storage_read = 0x4e20;
+lv1_get_async_status = 0x4e60;
 '''
     (OUT/'link.ld').write_text(linker)
     run([LLVM/'ld.lld.exe','-m','elf64ppc','-T',OUT/'link.ld','--no-undefined',
@@ -137,7 +142,8 @@ lv1_connect_irq_event = 0x4d20;
              # native_repo_enum(bus_type,dev_type,idx,&o1,&o2)->found;
              # native_repo_devid(o1,o2)->numeric dev_id (the storage_read id arg).
              ('native_repo_enum',0x4a40,0x1e9ba0,0x751280),
-             ('native_repo_devid',0x4a80,0x1ea1e8,0x751280)]
+             ('native_repo_devid',0x4a80,0x1ea1e8,0x751280),
+             ('native_repo_busid',0x4d60,0x1ea240,0x751280)]
     listing=[]
     for name,pc,target,toc in entries:
         block,rows=trampoline(pc,target,toc)
@@ -178,6 +184,42 @@ lv1_connect_irq_event = 0x4d20;
     for name,pc,num in [('lv1_event_rx_port',0x4ce0,18)]:
         source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
                 f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nmr r3,r4\nld r12,120(r1)\nmtcr r12\n'
+                f'addi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
+        block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
+        code[pc-SLOT:pc-SLOT+len(block)]=block
+        listing.extend(rows); syms[name]=pc
+    # allocate_device_dma_region (174): 5-in (bus,dev,size,a,b); HV returns status r3
+    # + dma bus address r4. The stub returns the DMA ADDRESS (mr r3,r4); a 0 return =
+    # alloc failed (store audit forbids writing to a caller-supplied out pointer).
+    for name,pc,num in [('lv1_alloc_dma',0x4da0,174)]:
+        source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
+                f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nmr r3,r4\nld r12,120(r1)\nmtcr r12\n'
+                f'addi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
+        block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
+        code[pc-SLOT:pc-SLOT+len(block)]=block
+        listing.extend(rows); syms[name]=pc
+    # map_device_dma_region (176): 6-in (bus,dev,lpar,dma,size,flags), status in r3.
+    for name,pc,num in [('lv1_map_dma',0x4de0,176)]:
+        source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
+                f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nld r12,120(r1)\nmtcr r12\naddi r1,r1,128\n'
+                f'ld r0,16(r1)\nmtlr r0\nblr\n')
+        block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
+        code[pc-SLOT:pc-SLOT+len(block)]=block
+        listing.extend(rows); syms[name]=pc
+    # storage_read (245): 6-in (dev,2,lba,count,4,dma_buf); HV returns status r3 + tag
+    # r4. The stub returns the TAG (mr r3,r4) for the async-status poll to match.
+    for name,pc,num in [('lv1_storage_read',0x4e20,245)]:
+        source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
+                f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nmr r3,r4\nld r12,120(r1)\nmtcr r12\n'
+                f'addi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
+        block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
+        code[pc-SLOT:pc-SLOT+len(block)]=block
+        listing.extend(rows); syms[name]=pc
+    # get_async_status (249): 1-in (dev); HV returns status r3 + tag r4 + result r5.
+    # The stub returns the RESULT (mr r3,r5); result & 0xffffff == 0 means complete.
+    for name,pc,num in [('lv1_get_async_status',0x4e60,249)]:
+        source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
+                f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nmr r3,r5\nld r12,120(r1)\nmtcr r12\n'
                 f'addi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
         block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
         code[pc-SLOT:pc-SLOT+len(block)]=block

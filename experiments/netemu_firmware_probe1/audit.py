@@ -15,7 +15,8 @@ def audit_ir(path):
             'irq_save','irq_restore','read_msr','read_pir','native_clock',
             'stock_ufs_open','stock_ufs_stat','stock_raw_write','stock_ufs_close',
             'lv1_open_device','lv1_close_device','lv1_event_rx_port','lv1_connect_irq_event',
-            'native_repo_enum','native_repo_devid'}
+            'native_repo_enum','native_repo_devid','native_repo_busid','lv1_alloc_dma',
+            'lv1_map_dma','lv1_storage_read','lv1_get_async_status'}
     defined={f.name for f in mod.functions if not f.is_declaration}
     for f in mod.functions:
         definitions={str(i):i for b in f.blocks for i in b.instructions}

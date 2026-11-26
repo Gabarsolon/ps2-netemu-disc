@@ -230,6 +230,10 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                         # native_repo_devid(o1,o2) -> numeric dev_id; r2=TOC.
                         assert self.get('r2')==TOC
                         self.calls.append('repo_devid'); self.ret(getattr(self,'repo_devid',0x2)); continue
+                    if pc==0x1ea240:
+                        # native_repo_busid(o1) -> numeric bus_id; r2=TOC.
+                        assert self.get('r2')==TOC
+                        self.calls.append('repo_busid'); self.ret(getattr(self,'repo_busid',0x4)); continue
                     boundary={0x1ecc5c:'open',0x1ec760:'stat',0x1ed458:'write',0x1ecb10:'close'}.get(pc)
                     if boundary:
                         assert kind=='shutdown' and original==1 and not self.depth and self.phase()==4
@@ -246,8 +250,12 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             ptr=self.get('r5'); assert self.stack(ptr,512)
                             sec=self.rd(ptr,512); q=struct.unpack('>64Q',sec)
                             assert q[0:2]==(0x4f574e5345433100,0x1000000000200) and q[4:7]==(0xb46100,2,expected)
-                            _dv=getattr(self,'repo_devid',0x2)&MASK
-                            expected_probe=(_dv,_dv) if (q[2]>>32)==1 else (0,0)
+                            # probe 7d: w0 = sector first 8 bytes read back from the
+                            # DMA scratch (0 in emulation, no real DMA); w1 =
+                            # (map_ret<<48)|(async_result&0xffffffffffff).
+                            _w0=0
+                            _w1=((getattr(self,'map_ret',0)<<48)|(getattr(self,'async_result',0)&0xffffffffffff))&MASK
+                            expected_probe=(_w0,_w1) if (q[2]>>32)==1 else (0,0)
                             assert q[8:20]==tuple(self.state()) and q[62:]==expected_probe
                             self.sectors.append(sec); self.ret(self.write_rc)
                         else: assert self.get('r3')==self.fd; self.ret(self.close_rc)
@@ -273,13 +281,21 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                     if op==17:
                         if w==0x44000002 and 0x4c60<=pc<0x5000:
                             r11=self.get('r11'); assert (r11>>16)==0x8000,'forwarded sc0 bridge bit'
-                            hv=r11&0xffff; assert hv in (170,171,18,197)
+                            hv=r11&0xffff; assert hv in (170,171,18,197,174,176,245,249)
                             if hv==170:
                                 assert (self.get('r3'),self.get('r4'),self.get('r5'))==(4,2,0)
                             elif hv==171:
                                 assert (self.get('r3'),self.get('r4'))==(4,2)
                             elif hv==197:
                                 assert (self.get('r3'),self.get('r4'),self.get('r6'))==(4,2,0)
+                            elif hv==174:
+                                assert (self.get('r3'),self.get('r4'),self.get('r5'),self.get('r6'),self.get('r7'))==(4,2,0x100000,0x14,0)
+                            elif hv==176:
+                                assert (self.get('r3'),self.get('r4'))==(4,2) and self.get('r7')==0x100000 and self.get('r8')==0xe000000000000800
+                            elif hv==245:
+                                assert (self.get('r3'),self.get('r4'),self.get('r5'),self.get('r6'),self.get('r7'))==(2,2,16,1,4)
+                            elif hv==249:
+                                assert self.get('r3')==2
                             for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
                             for c in range(8): self.put('cr'+str(c),c^5)
                             self.put('lr',0x1028); self.put('ctr',0xdeadc0de); self.put('xer',7)
@@ -287,6 +303,14 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                                 self.put('r4',getattr(self,'lv1_port',0x55)); self.put('r3',getattr(self,'lv1_event_status',0))
                             elif hv==197:
                                 self.put('r3',getattr(self,'lv1_conn_ret',0))
+                            elif hv==174:
+                                self.put('r4',getattr(self,'dma_addr',0x5000000)); self.put('r3',getattr(self,'dma_ares',0))
+                            elif hv==176:
+                                self.put('r3',getattr(self,'map_ret',0))
+                            elif hv==245:
+                                self.put('r4',getattr(self,'read_tag',0x7)); self.put('r3',0)
+                            elif hv==249:
+                                self.put('r5',getattr(self,'async_result',0)); self.put('r3',0)
                             else:
                                 self.put('r3',getattr(self,'lv1_open_ret',0) if hv==170 else getattr(self,'lv1_close_ret',0))
                             self.pc(pc+4)
@@ -382,9 +406,9 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
-            assert getattr(m,'sc1_calls',0)==0 and m.calls.count('repo_enum')==2 and m.calls.count('repo_devid')==2
+            assert getattr(m,'sc1_calls',0)==6 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
-            assert q[62:]==(0x2,0x2)
+            assert q[62:]==(0,0)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])
             n=len(m.calls); m.call('shutdown'); assert m.calls[n:]==['original_shutdown']
             m.call('refresh'); assert m.reason_stores==1

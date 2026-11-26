@@ -56,6 +56,17 @@ extern unsigned char native_repo_enum(u64,u64,u64,u64*,u64*);
 /* Probe 7b: numeric dev_id from the two repository node handles (r2=TOC). This
  * is the id argument storage_read(245)/send_device_command(248) take. */
 extern u64 native_repo_devid(u64,u64);
+/* Probe 7c: numeric bus_id (FUN_001ea240, r2=TOC). */
+extern u64 native_repo_busid(u64);
+/* HV 174 allocate_device_dma_region(bus,dev,size,a,b): returns the DMA bus
+ * address (0 = alloc failed). Forwarded sc0 (no patch A). */
+extern u64 lv1_alloc_dma(u64,u64,u64,u64,u64);
+/* HV 176 map_device_dma_region(bus,dev,lpar,dma,size,flags): returns status. */
+extern u64 lv1_map_dma(u64,u64,u64,u64,u64,u64);
+/* HV 245 storage_read(dev,2,lba,count,4,dma_buf): returns the async tag. */
+extern u64 lv1_storage_read(u64,u64,u64,u64,u64,u64);
+/* HV 249 get_async_status(dev): returns the result word (&0xffffff==0 = done). */
+extern u64 lv1_get_async_status(u64);
 /* Probe result slots in the owned block, past the validated lease fields. */
 #define L_OPEN  L_END
 #define L_CLOSE (L_END+1)

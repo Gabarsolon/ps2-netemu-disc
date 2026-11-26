@@ -138,19 +138,37 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
              * repository node -> probe 7b does storage_read(245) (forwarded, no A).
              * If optical found==0 but flash found==1 -> optical is NOT a storage node
              * -> the read needs send_device_command(248)+ATAPI CDB (direct sc1, A). */
-            /* PROBE 7b: derive the numeric dev_id for the optical (5,5) vs the flash
-             * (5,14) control. Probe 7a proved the enumerator finds the storage bus
-             * (bus 4). Now convert each (o1,o2) node pair to its dev_id via
-             * native_repo_devid (FUN_001ea1e8), the id storage_read takes. Store the
-             * optical dev_id and the flash dev_id. If they differ and the optical
-             * dev_id is valid, the optical is a distinct storage node -> probe 7c
-             * does storage_read(245) (forwarded, no A). Still no open, no command. */
-            u64 o1=0,o2=0,f1=0,f2=0;
+            /* PROBE 7d: READ ONE SECTOR from the optical. open -> alloc DMA region
+             * (174) -> map it (176) to the owned block's ZEROED scratch gap (alloc+
+             * 0x200, between the header and the integrity-checked command/data
+             * patterns, so the DMA does not corrupt them) -> storage_read(245) LBA 16
+             * (ISO9660/PS2 volume descriptor) -> poll get_async_status(249) until
+             * result&0xffffff==0 -> read the DMA'd first 8 bytes back via Q(). All
+             * forwarded sc0, no A. w0 = the sector's first 8 bytes (expect 0x0143443030
+             * 310100 = 01 "CD001" 01 on a valid PS2 disc). w1 = (map_ret<<48)|result.
+             * lpar_scratch = p+(alloc-e)+0x200 must sit in netemu's DMA window
+             * (< 0x3ffffff; the owned block does). Fail-open at each nonzero step. */
+            u64 o1=0,o2=0;
             u64 of=(u64)(native_repo_enum(5,5,0,&o1,&o2)&0xff);
-            u64 ff=(u64)(native_repo_enum(5,14,0,&f1,&f2)&0xff);
-            u64 odev=of?native_repo_devid(o1,o2):0;
-            u64 fdev=ff?native_repo_devid(f1,f2):0;
-            probe_store(alloc,odev,fdev);
+            u64 bus=of?native_repo_busid(o1):0;
+            u64 dev=of?native_repo_devid(o1,o2):0;
+            u64 data8=0, w1=PROBE_NOCLOSE;
+            if (of && lv1_open_device(bus,dev,0)==0) {
+                u64 dma=lv1_alloc_dma(bus,dev,0x100000,0x14,0);
+                if (dma) {
+                    u64 lpar_scratch=p+(alloc-e)+0x200;
+                    u64 mret=lv1_map_dma(bus,dev,lpar_scratch,dma,0x100000,0xe000000000000800ULL);
+                    if (mret==0) {
+                        u64 tag=lv1_storage_read(dev,2,16,1,4,dma); (void)tag;
+                        u64 res=0xffffffffffffffffULL;
+                        for (u32 i=0;i<200;++i) { res=lv1_get_async_status(dev); if ((res&0xffffff)==0) break; }
+                        data8=Q(alloc+0x200);
+                        w1=(mret<<48)|(res&0xffffffffffffULL);
+                    } else w1=(mret<<48)|0xBAD;
+                }
+                (void)lv1_close_device(bus,dev);
+            }
+            probe_store(alloc,data8,w1);
         }
     }
     if (!empty()) return result;
