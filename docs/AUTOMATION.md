@@ -15,9 +15,20 @@ power-off. Details and evidence: [PS3_BLUETOOTH_WAKE.md](PS3_BLUETOOTH_WAKE.md)
 | Buttons | `python tools/ps3_bt_pad.py press <btn> [ms]` or `... shell`; Python `PS3BtPad` | PROVEN at XMB and in a PS2 game 2026-11-24 |
 | Launch an ISO | `GET http://192.168.0.169/play.ps3/dev_hdd0/PS2ISO/<iso>` or `tools/run_test.py` | PROVEN |
 | Auto-exit PS2 | auto-return netemu builds (reason byte 2 after 20 s) | PROVEN carrier runs, ~75 s to XMB |
+| Carrier buzzer screen | IGNORE IT — see note below | normal, not a hang |
 | Recover | `python tools/ps3_auto.py recover` (30 s AC cut, waits for auto-boot, else servo press) | auto-boot PROVEN 3/3 hard cuts from XMB via autoexec.bat; servo step PROVEN alone 2026-11-26, full fallback path only dry-run |
 | Power button | `python tools/ps3_power_button.py on` (Pico servo, [SERVO_POWER_BUTTON.md](SERVO_POWER_BUTTON.md)) | PROVEN boot from standby 2026-11-26 |
 | Install netemu | `tools/install_netemu.ps1 -File <self> -Force` (backup + hash readback) | PROVEN |
+
+**Carrier buzzer screen is NORMAL (owner 2026-11-27):** the Buzz! Schools Quiz
+carrier shows "THE BUZZ!™ BUZZERS ARE NOT DETECTED. PLEASE INSERT THE BUZZ!™
+BUZZERS INTO A USB CONNECTOR." when no Buzz buzzers are plugged in. That is the
+game's normal state, NOT a hang. The carrier only exists to boot netemu so the
+probe runs; auto-return builds finish and write the snapshot regardless. Do NOT
+power-cycle or try to exit it. The screen also ignores normal pad buttons (it
+waits for buzzers), so a non-response there is NOT evidence the BT pad is broken.
+The CSR BT pad works at XMB (PROVEN this session) and in the PS2 emulator
+(owner-PROVEN).
 
 Fixed facts: PS3 `192.168.0.169`; Tapo P115 at the IP in the private config
 (`C:\Users\remus\ps3_power_manager.py` / its JSON, currently `192.168.0.12`;
