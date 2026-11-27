@@ -81,7 +81,7 @@ static __attribute__((noinline)) void initialize(u64 a,u64 p,u64 e,u64 boot,
  * proto@0x2c, in_out@0x30, buffer@0x38. CDB = SCSI READ(10): 0x28, LBA(4 BE) at
  * bytes 2..5, transfer length (2 BE)=1 at bytes 7..8. proto=3 (DMA), in_out=1 (read),
  * block_size=2048, buffer = the DMA bus address. */
-static __attribute__((noinline)) void build_atapi(u64 a,u64 lba,u64 dma) {
+static __attribute__((noinline,unused)) void build_atapi(u64 a,u64 lba,u64 dma) {
     volatile u64 *s=(volatile u64 *)a;
     s[0]=0x2800000000000000ULL|((lba&0xffffffffULL)<<16); /* 28 00 LBA[2..5] 00 TLhi */
     s[1]=0x0100000000000000ULL;                            /* TLlo=01, rest 0 */
@@ -176,47 +176,32 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
              * and its snapshot machinery stay fully intact. alloc+map 0x1000 (sizes
              * matched) -> storage_read LBA 16 -> poll -> read back via Q(ea2). w0 =
              * sector first 8 bytes (expect 0x0143443030310100 = 01 "CD001" 01). */
+            /* PROBE 7o (CONTROL): all optical send_device_command(248) attempts returned
+             * -6 (NO_ENTRY) through 7n, with the ABI verified, patch A applied and the
+             * full IRQ setup (18/197/28). Before concluding the optical is fundamentally
+             * not a commandable storage device for the PS2_NE LPAR, test our core storage
+             * machinery against the KNOWN-GOOD device: FLASH (bus type 5, dev type 14),
+             * which netemu itself reads via storage_read (dev_id 4, proven in 7b). Same
+             * enum -> open -> alloc(174) -> map(176) -> storage_read(245) region 2 LBA 0 ->
+             * poll -> read back. flash status==0 + nonzero data8 => our machinery is good
+             * and the optical -6 is device-specific (ownership/registration). flash ALSO
+             * -6 => the problem is our owned_startup context/timing, not the optical. */
             u64 o1=0,o2=0;
-            u64 of=(u64)(native_repo_enum(5,5,0,&o1,&o2)&0xff);
+            u64 of=(u64)(native_repo_enum(5,14,0,&o1,&o2)&0xff);   /* FLASH control */
             u64 bus=of?native_repo_busid(o1):0;
             u64 dev=of?native_repo_devid(o1,o2):0;
             u64 data8=0, w1=PROBE_NOCLOSE;
             if (of && lv1_open_device(bus,dev,0)==0) {
-                /* PROBE 7m: before any device command, wire the optical's interrupt
-                 * like ps2_emu fn_00022460 does (open + event-port + connect-irq, 4
-                 * syscalls). 7L's send_device_command(248) returned -6 (NO_ENTRY) with
-                 * only a bare open_device; LV1 likely rejects commands until the
-                 * device's event port is constructed and its IRQ connected. Both calls
-                 * were PROVEN to return 0 in probe 6 (forwarded sc0, no patch A). */
-                u64 port=lv1_event_rx_port();                 /* 18 -> port */
-                u64 cret=lv1_connect_irq_event(bus,dev,port,0); /* 197 -> status */
-                u64 pret=lv1_connect_irq_plug(9,port);        /* 28 -> status (virq 9) */
-                (void)port; (void)cret; (void)pret;
-                u64 dma=lv1_alloc_dma(bus,dev,0x1000,0xC,0);   /* 4KB io_pagesize (0xC), fits the 256KB pool */
+                u64 dma=lv1_alloc_dma(bus,dev,0x1000,0xC,0);   /* 4KB io_pagesize (0xC) */
                 if (dma) {
                     u64 ea2=(alloc+0x4000)&~0xfffULL;        /* page-aligned free pool RAM */
                     u64 lpar2=p+(ea2-e);
                     u64 mret=lv1_map_dma(bus,dev,lpar2,dma,0x1000,0xe000000000000800ULL);
                     if (mret==0) {
-                        /* PROBE 7j (ATAPI read): 7h/7i proved the optical has NO storage_read
-                         * regions (0/1/2 all -6). It is an ATAPI node -> raw read via
-                         * send_device_command(248) + a READ(10) CDB. 248 is normally a DIRECT
-                         * sc1 (needs patch A); we FIRST try it FORWARDED (sc0 bridge, no patch
-                         * A) in case the bridge whitelists it. Build the ATAPI command block in
-                         * an owned-block scratch slot (alloc+0x100, past the lease/probe slots,
-                         * before the integrity-checked command/data patterns at +0x1040), issue
-                         * 248 (dev=2, cmd_id=1, cmd_block_lpar, size 0x40, data=dma, len 2048),
-                         * poll get_async_status(249), read the sector back from ea2 (EIB-
-                         * coherent). send_status==0 + data8 = 01 "CD001" 01 => DISC READ WORKS.
-                         * send_status<0 forwarded => not whitelisted -> 7k applies patch A +
-                         * direct sc1. */
-                        u64 cb=alloc+0x100;            /* owned-block scratch for the command block */
-                        u64 cb_lpar=p+(cb-e);
-                        build_atapi(cb,16,dma);
-                        u64 sstat=lv1_send_device_command(dev,1,cb_lpar,0x40,dma,2048);
+                        u64 sstat=lv1_storage_read(dev,2,0,1,4,dma);   /* flash region 2, LBA 0 */
                         u64 res=0xffffffffffffffffULL;
                         for (u32 i=0;i<200;++i) { res=lv1_get_async_status(dev); if ((res&0xffffff)==0) break; }
-                        data8=Q(ea2);                  /* sector first 8 bytes (expect 0x0143443030310100) */
+                        data8=Q(ea2);                  /* flash sector 0 first 8 bytes */
                         w1=(sstat<<48)|(res&0xffffffffffffULL);
                     } else w1=(mret<<48)|0xBAD;
                 }

@@ -299,7 +299,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             elif hv==176:
                                 assert (self.get('r3'),self.get('r4'))==(4,2) and self.get('r7')==0x1000 and self.get('r8')==0xe000000000000800
                             elif hv==245:
-                                assert self.get('r3')==2 and self.get('r4') in (0,1,2) and (self.get('r5'),self.get('r6'),self.get('r7'))==(16,1,4)
+                                assert self.get('r3')==2 and self.get('r4') in (0,1,2) and (self.get('r6'),self.get('r7'))==(1,4)
                             elif hv==248:
                                 # ATAPI send_device_command: dev=2, cmd_id=1, cmd_block size
                                 # 0x40, data buffer = the modeled DMA addr, len 2048.
@@ -439,7 +439,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
-            assert getattr(m,'sc1_calls',0)==9 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
+            assert getattr(m,'sc1_calls',0)==6 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
             assert q[62:]==(0,0)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])
