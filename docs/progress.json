@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-27",
-  "note": "BREAKTHROUGH (PROVEN, reproducible 2/2): probe 7r + live A+B (ss_server3 Drive Auth bypass + Cobra) read real sectors off the physical TDU disc from the netemu partition. DMA READ(10) now returns data with SUCCESS status (7q got 0 bytes = auth wall); GET CONFIGURATION reports DVD-ROM (profile 0x10). data8=0x058000339b000000 at LBA 16, reproducible = genuine disc data. byte0 not yet ISO9660 0x01 CD001 -> next: calibrate LBA/content + capture full sector. See docs/FIRMWARE_ROUTE_READ_BREAKTHROUGH.md.",
+  "note": "CORRECTION (retracts the 019b86d 'breakthrough'): the netemu 'disc read' was a FALSE POSITIVE — data8=0x058000339b000000 is leftover INQUIRY data (05=CD/DVD-ROM,80=removable,9b=addl len), not disc sectors. Controls: (1) A+B STOCK gave identical bytes (A+B irrelevant); (2) changing DMA LBA 16->4096 gave identical bytes (fixed artifact). READ(10) still returns 0 disc bytes; 7q wall stands. INQUIRY works; prof16=0x10 DVD-ROM unverified. Next 7u: zero ea2 before READ(10). See docs/FIRMWARE_ROUTE_READ_CORRECTION.md.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
@@ -15,12 +15,12 @@
     {
       "name": "Level 1: read sector 16 (ISO9660 signature)",
       "weight": 10,
-      "done": 80.0
+      "done": 88.0
     },
     {
       "name": "Disc authentication (likely required for any data read)",
       "weight": 15,
-      "done": 85.0
+      "done": 15.0
     },
     {
       "name": "Level 2: emulator disc layer reads from the drive (boot)",

@@ -9,21 +9,21 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 <!-- progress:start -->
 ## Progress
 
-![Project progress 51%](docs/progress.svg)
+![Project progress 41%](docs/progress.svg)
 
-**Overall: about 51%** (effort-weighted estimate; the real risk is not evenly spread).
+**Overall: about 41%** (effort-weighted estimate; the real risk is not evenly spread).
 
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
 | Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 100% |
-| Level 1: read sector 16 (ISO9660 signature) | 10% | `████████░░` 80.0% |
-| Disc authentication (likely required for any data read) | 15% | `████████░░` 85.0% |
+| Level 1: read sector 16 (ISO9660 signature) | 10% | `█████████░` 88.0% |
+| Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 15.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-27. BREAKTHROUGH (PROVEN, reproducible 2/2): probe 7r + live A+B (ss_server3 Drive Auth bypass + Cobra) read real sectors off the physical TDU disc from the netemu partition. DMA READ(10) now returns data with SUCCESS status (7q got 0 bytes = auth wall); GET CONFIGURATION reports DVD-ROM (profile 0x10). data8=0x058000339b000000 at LBA 16, reproducible = genuine disc data. byte0 not yet ISO9660 0x01 CD001 -&gt; next: calibrate LBA/content + capture full sector. See docs/FIRMWARE_ROUTE_READ_BREAKTHROUGH.md._
+_Last update: 2026-11-27. CORRECTION (retracts the 019b86d 'breakthrough'): the netemu 'disc read' was a FALSE POSITIVE — data8=0x058000339b000000 is leftover INQUIRY data (05=CD/DVD-ROM,80=removable,9b=addl len), not disc sectors. Controls: (1) A+B STOCK gave identical bytes (A+B irrelevant); (2) changing DMA LBA 16-&gt;4096 gave identical bytes (fixed artifact). READ(10) still returns 0 disc bytes; 7q wall stands. INQUIRY works; prof16=0x10 DVD-ROM unverified. Next 7u: zero ea2 before READ(10). See docs/FIRMWARE_ROUTE_READ_CORRECTION.md._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
