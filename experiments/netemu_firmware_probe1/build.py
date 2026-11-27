@@ -208,10 +208,13 @@ dcache_flush = 0x4ea0;
         code[pc-SLOT:pc-SLOT+len(block)]=block
         listing.extend(rows); syms[name]=pc
     # storage_read (245): 6-in (dev,2,lba,count,4,dma_buf); HV returns status r3 + tag
-    # r4. The stub returns the TAG (mr r3,r4) for the async-status poll to match.
+    # r4. PROBE 7h: the stub returns the STATUS r3 (no mr r3,r4) so the probe can
+    # tell an accepted read (status 0) from a rejected one (region/dev/args). The
+    # poll below is untagged (loops on async_result&0xffffff==0), so the tag is not
+    # needed. 7f/7g already proved the chain "completes" with 0 bytes transferred.
     for name,pc,num in [('lv1_storage_read',0x4e20,245)]:
         source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
-                f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nmr r3,r4\nld r12,120(r1)\nmtcr r12\n'
+                f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nld r12,120(r1)\nmtcr r12\n'
                 f'addi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
         block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
         code[pc-SLOT:pc-SLOT+len(block)]=block

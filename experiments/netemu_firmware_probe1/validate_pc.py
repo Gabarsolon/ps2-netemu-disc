@@ -293,7 +293,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             elif hv==176:
                                 assert (self.get('r3'),self.get('r4'))==(4,2) and self.get('r7')==0x1000 and self.get('r8')==0xe000000000000800
                             elif hv==245:
-                                assert (self.get('r3'),self.get('r4'),self.get('r5'),self.get('r6'),self.get('r7'))==(2,2,16,1,4)
+                                assert self.get('r3')==2 and self.get('r4') in (0,1,2) and (self.get('r5'),self.get('r6'),self.get('r7'))==(16,1,4)
                             elif hv==249:
                                 assert self.get('r3')==2
                             for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
@@ -412,7 +412,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
-            assert getattr(m,'sc1_calls',0)==6 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
+            assert getattr(m,'sc1_calls',0)==7 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
             assert q[62:]==(0,0)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])

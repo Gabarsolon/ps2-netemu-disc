@@ -170,11 +170,22 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
                     u64 lpar2=p+(ea2-e);
                     u64 mret=lv1_map_dma(bus,dev,lpar2,dma,0x1000,0xe000000000000800ULL);
                     if (mret==0) {
-                        u64 tag=lv1_storage_read(dev,2,16,1,4,dma); (void)tag;
+                        /* PROBE 7i (diagnostic, safe): 7h proved storage_read(region=2) is
+                         * REJECTED with status -6 (0xfffffffa = LV1_NO_ENTRY): region 2 does
+                         * not exist on the optical, and the res=0 "completion" was a phantom
+                         * (no async op). The optical is likely an ATAPI node (read via
+                         * send_device_command(248)+CDB, needs patch A), not a region block
+                         * device. Before committing to the patch-A/ATAPI path, cheaply test
+                         * whether ANY forwarded storage_read region works: try region 0 and
+                         * region 1 and capture both statuses. The stub returns status r3.
+                         * sr0==0 or sr1==0 => a readable region exists (stay no-patch-A);
+                         * both -6 => no storage region => go ATAPI/248 + patch A. */
+                        u64 sr0=lv1_storage_read(dev,0,16,1,4,dma);
+                        u64 sr1=lv1_storage_read(dev,1,16,1,4,dma);
                         u64 res=0xffffffffffffffffULL;
                         for (u32 i=0;i<200;++i) { res=lv1_get_async_status(dev); if ((res&0xffffff)==0) break; }
-                        dcache_flush(ea2,0x1000/128);   /* probe 7g: invalidate stale cache before readback (lines) */
-                        data8=Q(ea2);
+                        (void)ea2;
+                        data8=((sr0&0xffffULL)<<16)|(sr1&0xffffULL);   /* [31:16]=region0 status, [15:0]=region1 */
                         w1=(mret<<48)|(res&0xffffffffffffULL);
                     } else w1=(mret<<48)|0xBAD;
                 }
