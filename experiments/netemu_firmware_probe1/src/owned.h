@@ -49,6 +49,10 @@ extern u64 lv1_close_device(u64,u64);
 extern u64 lv1_event_rx_port(void);
 /* HV 197 connect_interrupt_event_receive_port(bus,dev,port,0): returns status. */
 extern u64 lv1_connect_irq_event(u64,u64,u64,u64);
+/* PROBE 7n: HV 28 connect_irq_plug_ext(virq, port) -- ps2_emu fn_00022460 calls it
+ * (r3=9 optical virq, r4=port) after 197 to attach the virq to the event port.
+ * Forwarded sc0 (netemu's HDD path uses 28). Returns status. */
+extern u64 lv1_connect_irq_plug(u64,u64);
 /* Probe 7a: netemu repository enumerator (called by absolute addr, r2=TOC via
  * trampoline). native_repo_enum(bus_type,dev_type,index,&out1,&out2) -> found (char).
  * Resolves whether the optical (bus type 5, dev type 5) is a repository storage node. */

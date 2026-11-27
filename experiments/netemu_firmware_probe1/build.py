@@ -115,6 +115,7 @@ lv1_storage_read = 0x4e20;
 lv1_get_async_status = 0x4e60;
 dcache_flush = 0x4ea0;
 lv1_send_device_command = 0x4ec0;
+lv1_connect_irq_plug = 0x4f00;
 '''
     (OUT/'link.ld').write_text(linker)
     run([LLVM/'ld.lld.exe','-m','elf64ppc','-T',OUT/'link.ld','--no-undefined',
@@ -237,6 +238,15 @@ lv1_send_device_command = 0x4ec0;
     for name,pc,num in [('lv1_send_device_command',0x4ec0,248)]:
         source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
                 f'li r11,{num}\nsc 1\nld r12,120(r1)\nmtcr r12\n'
+                f'addi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
+        block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
+        code[pc-SLOT:pc-SLOT+len(block)]=block
+        listing.extend(rows); syms[name]=pc
+    # PROBE 7n: connect_irq_plug_ext (28) forwarded sc0, returns status r3. 2-in
+    # (virq, port). ps2_emu attaches optical virq 9 to the event port after 197.
+    for name,pc,num in [('lv1_connect_irq_plug',0x4f00,28)]:
+        source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
+                f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nld r12,120(r1)\nmtcr r12\n'
                 f'addi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
         block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
         code[pc-SLOT:pc-SLOT+len(block)]=block

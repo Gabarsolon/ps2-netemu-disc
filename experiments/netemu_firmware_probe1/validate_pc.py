@@ -285,13 +285,15 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                     if op==17:
                         if w==0x44000002 and 0x4c60<=pc<0x5000:
                             r11=self.get('r11'); assert (r11>>16)==0x8000,'forwarded sc0 bridge bit'
-                            hv=r11&0xffff; assert hv in (170,171,18,197,174,176,245,248,249)
+                            hv=r11&0xffff; assert hv in (170,171,18,28,197,174,176,245,248,249)
                             if hv==170:
                                 assert (self.get('r3'),self.get('r4'),self.get('r5'))==(4,2,0)
                             elif hv==171:
                                 assert (self.get('r3'),self.get('r4'))==(4,2)
                             elif hv==197:
                                 assert (self.get('r3'),self.get('r4'),self.get('r6'))==(4,2,0)
+                            elif hv==28:
+                                assert self.get('r3')==9 and self.get('r4')==getattr(self,'lv1_port',0x55)
                             elif hv==174:
                                 assert (self.get('r3'),self.get('r4'),self.get('r5'),self.get('r6'),self.get('r7'))==(4,2,0x1000,0xC,0)
                             elif hv==176:
@@ -312,6 +314,8 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                                 self.put('r4',getattr(self,'lv1_port',0x55)); self.put('r3',getattr(self,'lv1_event_status',0))
                             elif hv==197:
                                 self.put('r3',getattr(self,'lv1_conn_ret',0))
+                            elif hv==28:
+                                self.put('r3',getattr(self,'lv1_plug_ret',0))
                             elif hv==174:
                                 self.put('r4',getattr(self,'dma_addr',0x5000000)); self.put('r3',getattr(self,'dma_ares',0))
                             elif hv==176:
@@ -435,7 +439,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
-            assert getattr(m,'sc1_calls',0)==8 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
+            assert getattr(m,'sc1_calls',0)==9 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
             assert q[62:]==(0,0)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])

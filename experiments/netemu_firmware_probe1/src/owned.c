@@ -190,7 +190,8 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
                  * were PROVEN to return 0 in probe 6 (forwarded sc0, no patch A). */
                 u64 port=lv1_event_rx_port();                 /* 18 -> port */
                 u64 cret=lv1_connect_irq_event(bus,dev,port,0); /* 197 -> status */
-                (void)port; (void)cret;
+                u64 pret=lv1_connect_irq_plug(9,port);        /* 28 -> status (virq 9) */
+                (void)port; (void)cret; (void)pret;
                 u64 dma=lv1_alloc_dma(bus,dev,0x1000,0xC,0);   /* 4KB io_pagesize (0xC), fits the 256KB pool */
                 if (dma) {
                     u64 ea2=(alloc+0x4000)&~0xfffULL;        /* page-aligned free pool RAM */
