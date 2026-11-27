@@ -86,10 +86,35 @@ fallback only.
 - **C. Stage disc -> HDD ISO, launch via netemu's proven UFS path** — works but
   is a copy, against the "straight from drive" goal. Fallback only.
 
-## Most tractable next experiment
+## Feasibility verdict: Route A is feasible in principle (PROVEN by decompile)
 
-Trace the softemu CDVD **worker** that dequeues the `0xface` message and
-dispatches command 0x4b, to find the exact LV1 hypercall + whether it reaches a
-replayable storage op or a secure-key op. That single answer decides whether
-option A is feasible. (Targets: who reads globals -0x5858 / -0x5848 / -0x5830;
-the worker thread entry.)
+The softemu CDVD handlers (0x88e94..0x89e40, local_only/softemu_cdvd_handlers.txt)
+build **standard ATAPI CDBs and send them via LV1 248** (`cdvd_send_atapi_command`
+0x88C88 / `cdvd_send_device_command` 0x88B9C) — the SAME channel the netemu probe
+already uses (`lv1_send_device_command`). Confirmed CDBs seen: `0x46` GET
+CONFIGURATION, `0xBB` SET CD SPEED, `0x1b` START STOP UNIT, READ TOC (0x400 /
+0x810-byte replies). So the auth is not locked behind a secure-only channel; it
+is ultimately ATAPI-over-248, replayable from the netemu once the exact auth CDB
+is known.
+
+## Execution roadmap (Route A)
+
+1. **Find the auth CDB.** Trace the CDVD worker that dequeues the `0xface`
+   message and dispatches command code 0x4b (block +0x40); read the CDB bytes it
+   builds before `cdvd_send_atapi_command`. Also capture the PS2-DVD **sector
+   read** CDB the softemu uses (it may be a vendor read, not plain READ(10) 0x28
+   — that alone could explain 7u's READ(10) SUCCESS+0 bytes).
+2. **Build probe 7v.** Issue, from the netemu partition via the proven
+   `run_atapi` (LV1 248), the softemu's drive-setup sequence (START STOP 0x1b ->
+   GET CONFIG 0x46 -> SET CD SPEED 0xBB) then the auth CDB (0x4b-equivalent),
+   then the softemu's sector-read CDB. Capture the reply (key regions) and
+   whether sector content now returns (byte0=0x01 "CD001" at LBA 16), with the
+   LBA-variance + buffer-leftover controls from 7t/7u.
+3. **If content returns:** wire this read into the netemu CDVD path
+   (dispatcher 0x1359d4 / UFS reader 0x1ed5cc) so the emulator sources sectors
+   from the drive. If the auth needs a key fed BACK to the drive or software
+   sector-decrypt (the TBLr XOR-descramble in FUN_0022130c), port that too.
+
+Open risk: the auth may still require the secure module's per-disc key that only
+ss_server3 holds; 7v will show empirically whether the raw CDB sequence unlocks
+content or returns an auth/again status.
