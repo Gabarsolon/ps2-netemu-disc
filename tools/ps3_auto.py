@@ -27,6 +27,10 @@ from pathlib import Path
 HOST = 'http://192.168.0.169'
 OFF_WATTS = 15   # below this the console is in standby (XMB is ~73 W)
 ROOT = Path(__file__).resolve().parents[1]
+# `python -I` (isolated) strips the script dir from sys.path, which broke
+# `from ps3_power_button import Servo` in servo_press(). Re-add tools/ so the
+# servo recovery works under -I too.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 CAPTURE_TOOLS = Path(r'C:\Users\remus\ps3-240p\tools')   # capture_unmute.py lives here
 sys.path.insert(0, r'C:\Users\remus')                     # ps3_power_manager.py (private Tapo config)
 
