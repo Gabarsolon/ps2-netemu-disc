@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-27. probe 7g: dcbf cache-flush ruled out; EIB DMA is coherent so data8=0 = no transfer. Root cause = DMA buffer mapped into netemu RAM not its 0x70000000 DMA window. Next: map optical DMA into the real window._
+_Last update: 2026-11-27. probes 7h/7i: optical returns -6 (NO_ENTRY) for storage_read regions 0/1/2 — it is ATAPI, not a block device. Raw read needs send_device_command(248)+CDB (direct sc1, patch A). Pivoting to the ATAPI path._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

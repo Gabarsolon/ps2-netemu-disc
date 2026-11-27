@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-27",
-  "note": "probe 7g: dcbf cache-flush ruled out; EIB DMA is coherent so data8=0 = no transfer. Root cause = DMA buffer mapped into netemu RAM not its 0x70000000 DMA window. Next: map optical DMA into the real window.",
+  "note": "probes 7h/7i: optical returns -6 (NO_ENTRY) for storage_read regions 0/1/2 — it is ATAPI, not a block device. Raw read needs send_device_command(248)+CDB (direct sc1, patch A). Pivoting to the ATAPI path.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
