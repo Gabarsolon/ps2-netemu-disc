@@ -37,6 +37,15 @@ kernel panic a single power-button press does not boot the console; press the
 button **2 times**. `ps3_auto.py servo_press()` does this (two `PRESS 300`, ~1 s
 apart).
 
+**RULE (owner, 2026-11-27): KEEP PRESSING UNTIL IT TURNS ON.** One servo attempt
+is not enough — a single/double press can miss. After each press cycle, check
+state (`ps3_power_button.py status` or `ps3_auto.py state`: webMAN HTTP up OR
+watts rising from ~0 to the XMB idle ~66-73 W = booting/on). If still off
+(watts≈0, HTTP down), **press again and re-check, and repeat** — do not give up
+after one try. Only notify the owner to press by hand if many retries
+(≥5 cycles, ~2 min) all fail. `ps3_power_button.py on` must loop its press+verify
+until the console is confirmed on, not press once.
+
 Historical (while autoexec was present, PROVEN 3/3): the sc 377 re-arm made AC
 restore auto-boot (webMAN up ~18 s after AC on). That path is now disabled.
 

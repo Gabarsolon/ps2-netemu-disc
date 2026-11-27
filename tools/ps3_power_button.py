@@ -164,10 +164,18 @@ def main():
         if state != 'OFF':
             raise SystemExit(f'Refusing to press: console looks {state} (http={up}, watts={w}); '
                              'a press would turn a running PS3 off.')
-        print(servo.send('PRESS 300', timeout=9))
-        ok = wait_for(http_up, 120, step=4)
-        print('webMAN online: console booted' if ok else 'WARNING: webMAN not online after 120 s')
-        return 0 if ok else 1
+        # RULE (owner 2026-11-27): keep pressing until it turns on. One press can
+        # miss; a panic needs a double press. Retry press+verify up to 5 cycles.
+        for attempt in range(1, 6):
+            print(f'press attempt {attempt}/5:', servo.send('PRESS 300', timeout=9))
+            if wait_for(http_up, 45, step=4):
+                print(f'webMAN online: console booted (attempt {attempt})')
+                return 0
+            s2, u2, w2 = console_state()
+            print(f'  not up yet (http={u2}, watts={w2}); retrying' if attempt < 5 else
+                  f'  still off after {attempt} attempts (http={u2}, watts={w2})')
+        print('WARNING: console did not boot after 5 servo press cycles; press the power button by hand')
+        return 1
     return 0
 
 
