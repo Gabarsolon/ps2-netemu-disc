@@ -137,7 +137,25 @@ descrambles). The sector **data** read CDB and the exact command-0x4b mapping ar
 still behind the softemu's computed-jump dispatch table (Ghidra did not resolve
 it; refs to the handlers are neither CALL nor DATA).
 
-## Precise remaining RE target (for execution)
+## Probe 7v result (PROVEN console, local_only/snap_7v.bin): simple replay does NOT unlock
+
+7v added READ DVD STRUCTURE (0xAD fmt 0x01, copyright/key) before READ(10).
+Result `w1=0x10000d`: READ(10) STILL delivered 0 bytes (leftover=1), `copyright=0`
+(CPM=0 -> no CSS, consistent with PS2 media), `prof16=0x10` DVD, `cap_lba!=0`,
+`st_dma=0`, sense=0. So **reading the disc-key / copyright structure does not
+unlock media content.** The content gate is NOT CSS and NOT a readable-key thing;
+it needs the actual secure PS2 disc-auth handshake (cmd 0x4b -> ss_server3 secure
+module + disc keys), which is NOT a replayable ATAPI CDB from the netemu
+partition.
+
+**Route A (replay auth as plain ATAPI from the netemu) is empirically BLOCKED**
+for the buildable cases. The direct/firmware optical-read route cannot get sector
+content without reproducing the secure-module auth, which needs keys the netemu
+partition does not hold. Realistic remaining paths: **B. run ps2_softemu itself**
+(it has the whole auth subsystem), or **C. stage disc -> HDD ISO** (copy, against
+the no-copy goal). Both are large efforts; B preserves "play from the disc" best.
+
+## Precise remaining RE target (superseded by 7v for Route A; kept for reference)
 
 Crack the softemu CDVD command dispatch: the command code (block +0x40, e.g.
 0x4b) selects a handler via a computed branch near the worker that reads globals

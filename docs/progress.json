@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-27",
-  "note": "7u (trustworthy, buffer-leftover fixed): the netemu-partition drive read is characterized. Metadata works — GET CONFIGURATION=DVD-ROM (0x10), READ CAPACITY=nonzero. But READ(10) content returns SUCCESS status + 0 bytes + NO sense error (both PIO and DMA). Not a dead DMA path (small data-ins work), not a standard auth error (sense clean). = PS2-disc content gate: drive serves metadata, withholds sector content over generic ATAPI. A+B irrelevant. Viable route = Cobra-feeds-netemu (GameOS does the unlock, feeds sectors). See docs/FIRMWARE_ROUTE_READ_CORRECTION.md.",
+  "note": "7v (PROVEN): read DVD STRUCTURE copyright/key (0xAD) from netemu partition then READ(10). copyright=0 (CPM=0, no CSS), but READ(10) STILL 0 bytes -> reading the key structure does NOT unlock content. Route A (replay PS2 disc auth as plain ATAPI from netemu) empirically BLOCKED: the content gate needs the secure 0x4b handshake (ss_server3 + disc keys), not a replayable CDB. Direct/firmware optical-read route is a dead end without secure-module keys. Realistic paths: B run ps2_softemu (has the auth subsystem), or C stage to HDD ISO (copy). See docs/COBRA_FEEDS_NETEMU_SCOPE.md.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",

@@ -237,9 +237,15 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
                             0x2800000000100000ULL,0x0100000000000000ULL,
                             0x0000000C00000800ULL,0x0000000100000001ULL);
                         u64 rd_pio=Q(ea2+0x800);
-                        /* 7u: DMA READ(10) LBA 16 FIRST, then REQUEST SENSE after
-                         * it, so the sense explains why READ(10) returns no media
-                         * data. 6 run_atapi total, sc1 count unchanged. */
+                        /* 7v: READ DVD STRUCTURE copyright/key (0xAD fmt 0x01)
+                         * before READ(10), to read the disc protection/key info
+                         * and test whether it unlocks media content. 7 run_atapi
+                         * total -> sc1 21. */
+                        (void)run_atapi(dev,cb,cb_lpar,ea2+0x400,lpar2+0x400,8,1,
+                            0xAD00000000000001ULL,0x0008000000000000ULL,
+                            0x0000000C00000008ULL,0x0000000100000001ULL);
+                        u64 dvds=Q(ea2+0x400);
+                        u64 copyright=(dvds>>24)&0xffULL;   /* byte4 = CPM/CP_SEC/CGMS */
                         u64 st_dma=run_atapi(dev,cb,cb_lpar,ea2,lpar2,2048,16,
                             0x2800000000100000ULL,0x0100000000000000ULL,
                             0x0000000C00000001ULL,0x0000080000000003ULL);
@@ -264,8 +270,9 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
                         w1=((sense24&0xffffffULL)<<40)
                            |((st_dma&0xffULL)<<32)
                            |((prof16&0xffffULL)<<16)
-                           |((cap_lba!=0?1ULL:0ULL)<<10)
-                           |(leftover<<8)
+                           |((copyright&0xffULL)<<4)
+                           |((cap_lba!=0?1ULL:0ULL)<<3)
+                           |(leftover<<2)
                            |((rd_pio!=0?1ULL:0ULL)<<1)
                            |(rd_dma!=0?1ULL:0ULL);
                     } else w1=(mret<<48)|0xBAD;

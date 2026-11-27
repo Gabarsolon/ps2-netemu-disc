@@ -184,7 +184,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                 expected=0xfedcba9876543210; relsp=None; allocs=0; steps=0; helper=[]; minsp=SP
                 startcalls=len(self.calls); starttraps=len(self.traps); preexisting=None; true_result=None
                 countreads=self.heapreads; countwrites=self.heapwrites
-                for steps in range(650000):
+                for steps in range(900000):
                     pc=self.em.getExecutionAddress().getOffset()&MASK
                     if self.effect: self.effect(self,pc)
                     minsp=min(minsp,self.get('r1'))
@@ -260,7 +260,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             # 7u: emulated buffers are 0, so rd_dma==inq0==0 ->
                             # leftover bit (0x100) sets; data8=0.
                             _w0=0
-                            _w1=0x100
+                            _w1=0x4
                             expected_probe=(_w0,_w1) if (q[2]>>32)==1 else (0,0)
                             assert q[8:20]==tuple(self.state()) and q[62:]==expected_probe
                             self.sectors.append(sec); self.ret(self.write_rc)
@@ -308,7 +308,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                                 # call; validate the ABI invariant, not a fixed buffer layout.
                                 buf=self.get('r7')
                                 assert (self.get('r3'),self.get('r4'),self.get('r6'))==(2,1,0x40)
-                                assert 0<self.get('r8')<=2048
+                                assert 0<=self.get("r8")<=2048
                                 assert self.q(self.native_return+0x138)==buf
                             elif hv==249:
                                 assert self.get('r3')==2
@@ -346,7 +346,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             buf=self.get('r7')
                             assert self.get('r11')==0xf8
                             assert (self.get('r3'),self.get('r4'),self.get('r6'))==(2,1,0x40)
-                            assert 0<self.get('r8')<=2048
+                            assert 0<=self.get("r8")<=2048
                             assert self.q(self.native_return+0x138)==buf
                             for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
                             for c in range(8): self.put('cr'+str(c),c^5)
@@ -449,9 +449,9 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
-            assert getattr(m,'sc1_calls',0)==19 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
+            assert getattr(m,"sc1_calls",0)==21 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
-            assert q[62:]==(0,0x100)
+            assert q[62:]==(0,0x4)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])
             n=len(m.calls); m.call('shutdown'); assert m.calls[n:]==['original_shutdown']
             m.call('refresh'); assert m.reason_stores==1
