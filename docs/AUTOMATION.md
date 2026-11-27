@@ -24,14 +24,21 @@ Fixed facts: PS3 `192.168.0.169`; Tapo P115 at the IP in the private config
 never print credentials); capture card DirectShow name `USB3 Video`, HID
 `345f:2131`; stock netemu SHA256 `bad3e45c9a81f25726e414b146ea5a112f28216ab4bdd2fd9f5c81b33d04c80a`.
 
-## Why recovery is automatic now
+## Recovery (autoboot DISABLED by owner 2026-11-27)
 
-`/dev_hdd0/autoexec.bat` runs `/syscall.ps3?377|1` at every boot. That sets
-`PS3_SM_WAKE_P_O_R`, so when AC returns after a cut the console boots by
-itself (webMAN up ~18 s after AC on). No power button, no Bluetooth wake.
-LV1 clears the flag on every boot; autoexec re-arms it. **Do not delete
-autoexec.bat.** Old notes that say "plug cycle does not auto-boot, owner must
-press the button" predate this and are superseded.
+The owner disabled the autoboot plugin: `/dev_hdd0/autoexec.bat` (which ran
+`/syscall.ps3?377|1` at every boot to re-arm `PS3_SM_WAKE_P_O_R`) is **removed**.
+AC restore after a cut therefore does **not** boot the console on its own
+anymore. Recovery is now: AC cut to force-off a frozen console, then the Pico
+servo presses the power button.
+
+**Panic recovery needs a DOUBLE press (owner-reported 2026-11-27):** after a
+kernel panic a single power-button press does not boot the console; press the
+button **2 times**. `ps3_auto.py servo_press()` does this (two `PRESS 300`, ~1 s
+apart).
+
+Historical (while autoexec was present, PROVEN 3/3): the sc 377 re-arm made AC
+restore auto-boot (webMAN up ~18 s after AC on). That path is now disabled.
 
 **PROVEN once (2026-11-26):** the auto-boot also happens after a clean webMAN
 `/shutdown.ps3` followed by a `recover` cut (webMAN up 18 s after AC on). A
@@ -54,12 +61,14 @@ python tools/ps3_auto.py recover
 |---|---|---|---|
 | 0 | webMAN still answers | refuse, exit 1 (`--force` to override) | continue |
 | 1 | Smart plug off 30 s, then on (force-off) | continue | AC on not verified: exit 2 |
-| 2 | Wait 180 s for the sc 377 auto-boot | exit 0 | continue |
-| 3 | Servo presses the power button once | wait 180 s, exit 0 | exit 3 |
+| 2 | Wait 180 s for auto-boot (now disabled, so expect none) | exit 0 | continue |
+| 3 | Servo presses the power button **twice** (panic needs 2) | wait 180 s, exit 0 | exit 3 |
 
 Step 3 presses only if all of these hold: the plug is readable and on, it draws
 less than 15 W, and webMAN does not answer. A press on a running console turns
-it off, so any doubt means no press (exit 3). It never presses twice.
+it off, so any doubt means no press (exit 3). It presses twice (a panic needs a
+double press); a cut on a running console is already prevented by the plug/HTTP
+guard, so the double press lands only on a provably-off console.
 
 Force-off is always the smart plug (owner decision 2026-11-26), never a long
 hold of the button.

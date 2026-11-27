@@ -2,16 +2,16 @@
 
     python tools/ps3_auto.py state              # webMAN HTTP + XMB flag + plug on/off + watts
     python tools/ps3_auto.py grab [out.png]     # one capture-card frame; unmutes the card and retries if black
-    python tools/ps3_auto.py recover            # 30 s AC cut, wait for the sc 377 auto-boot, else servo press
+    python tools/ps3_auto.py recover            # 30 s AC cut, brief auto-boot wait, else servo double-press
     python tools/ps3_auto.py recover --force    # same, even if webMAN HTTP still answers
 
-Recovery relies on /dev_hdd0/autoexec.bat re-arming syscall 377 (PS3_SM_WAKE_P_O_R)
-at every boot, so AC restore boots the console by itself (PROVEN 3/3, see
-docs/PS3_BLUETOOTH_WAKE.md). recover refuses while webMAN answers unless --force:
-a healthy PS2 session has no network, so HTTP down alone is not a freeze. Decide
-"frozen" first (docs/AUTOMATION.md), then call recover. If no auto-boot (a panic
-wipes the wake flag) and the console is provably off, the Pico servo presses the
-power button once (docs/SERVO_POWER_BUTTON.md). Exit codes: 0 ok, 1 refused,
+Autoboot DISABLED by owner 2026-11-27: /dev_hdd0/autoexec.bat (sc 377 re-arm) is
+removed, so AC restore no longer boots the console on its own. Recovery = AC cut
+to force-off a frozen console, then the Pico servo presses the power button
+TWICE (owner-reported: a panic needs 2 presses; docs/SERVO_POWER_BUTTON.md).
+recover refuses while webMAN answers unless --force: a healthy PS2 session has no
+network, so HTTP down alone is not a freeze. Decide "frozen" first
+(docs/AUTOMATION.md), then call recover. Exit codes: 0 ok, 1 refused,
 2 AC on not verified, 3 not booted even after the servo step.
 """
 from __future__ import annotations
@@ -138,8 +138,10 @@ def wait_boot(wait_s):
 
 
 def servo_press():
-    """Press the power button once, only if the console is provably off.
+    """Press the power button TWICE, only if the console is provably off.
 
+    Owner-reported 2026-11-27: after a kernel panic the console needs TWO power-
+    button presses to boot (a single press does not boot a panic-standby console).
     A press on a running console turns it off, so an unreadable plug or high
     wattage means no press.
     """
@@ -153,12 +155,16 @@ def servo_press():
         return False
     try:
         from ps3_power_button import Servo
-        reply = Servo().send('PRESS 300', timeout=9)
+        servo = Servo()
+        reply = servo.send('PRESS 300', timeout=9)
+        print(f'servo press 1: {reply}')
+        time.sleep(1.0)
+        reply2 = servo.send('PRESS 300', timeout=9)
+        print(f'servo press 2: {reply2}')
     except (Exception, SystemExit) as e:  # no Pico, port held by servo_jog.py, no reply
         print(f'servo failed: {e}')
         return False
-    print(f'servo: {reply}')
-    return reply.startswith('OK')
+    return reply.startswith('OK') and reply2.startswith('OK')
 
 
 def recover(force, off_s, wait_s):
@@ -172,7 +178,7 @@ def recover(force, off_s, wait_s):
     if took is not None:
         print(f'auto-boot: webMAN online {took:.0f} s after AC on')
         return 0
-    print(f'no auto-boot within {wait_s} s (panic standby, or cut before autoexec ran?): trying the servo')
+    print(f'no auto-boot within {wait_s} s (panic standby / autoexec autoboot disabled): trying the servo (double press)')
     if servo_press():
         took = wait_boot(wait_s)
         if took is not None:

@@ -175,8 +175,11 @@ chip behind CSR USB IDs, so compatibility is UNKNOWN.
   calibration, PWM off when idle (no stall current, no jitter).
 - PC: check console state first (webMAN HTTP + Tapo P115 wattage). A press on a
   running PS3 shuts it down, so press only when state is known.
-- Recovery order after a freeze: hold 10 s (force off) -> wait -> press (on).
-  Fall back to smart-plug cut (>= 30 s) + press if the hold does not work.
+- Recovery order after a freeze: smart-plug cut (>= 30 s, force off) -> wait ->
+  press (on). **After a kernel panic, press TWICE** (owner-reported 2026-11-27: a
+  single press does not boot a panic-standby console; two `PRESS 300`, ~1 s apart).
+  Autoboot (sc 377 autoexec) was disabled by the owner 2026-11-27, so AC restore
+  no longer boots on its own -> the servo double-press is the recovery.
 
 ## On arrival
 
