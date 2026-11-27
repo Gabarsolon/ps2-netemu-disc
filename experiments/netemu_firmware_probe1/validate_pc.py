@@ -285,7 +285,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                     if op==17:
                         if w==0x44000002 and 0x4c60<=pc<0x5000:
                             r11=self.get('r11'); assert (r11>>16)==0x8000,'forwarded sc0 bridge bit'
-                            hv=r11&0xffff; assert hv in (170,171,18,28,197,174,176,245,248,249)
+                            hv=r11&0xffff; assert hv in (170,171,18,28,197,174,176,245,248,249,254)
                             if hv==170:
                                 assert (self.get('r3'),self.get('r4'),self.get('r5'))==(4,2,0)
                             elif hv==171:
@@ -302,11 +302,14 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                                 assert self.get('r3')==2 and self.get('r4') in (0,1,2) and (self.get('r6'),self.get('r7'))==(1,4)
                             elif hv==248:
                                 # ATAPI send_device_command: dev=2, cmd_id=1, cmd_block size
-                                # 0x40, data buffer = the modeled DMA addr, len 2048.
+                                # 0x40, data_buf = lpar2 (LPAR address of ea2), len 2048.
+                                lpar2=P+(((self.native_return+0x4000)&~0xfff)-E)
                                 assert (self.get('r3'),self.get('r4'),self.get('r6'),self.get('r8'))==(2,1,0x40,2048)
-                                assert self.get('r7')==getattr(self,'dma_addr',0x5000000)
+                                assert self.get('r7')==lpar2 and self.q(self.native_return+0x138)==lpar2
                             elif hv==249:
                                 assert self.get('r3')==2
+                            elif hv==254:
+                                assert (self.get('r3'),self.get('r4'))==(2,getattr(self,'send_tag',0x9))
                             for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
                             for c in range(8): self.put('cr'+str(c),c^5)
                             self.put('lr',0x1028); self.put('ctr',0xdeadc0de); self.put('xer',7)
@@ -324,6 +327,8 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                                 self.put('r4',getattr(self,'read_tag',0x7)); self.put('r3',0)
                             elif hv==249:
                                 self.put('r5',getattr(self,'async_result',0)); self.put('r3',0)
+                            elif hv==254:
+                                self.put('r4',getattr(self,'async_result',0)); self.put('r3',getattr(self,'check_ret',0))
                             elif hv==248:
                                 self.put('r4',getattr(self,'send_tag',0x9)); self.put('r3',getattr(self,'send_status',0))
                             else:
@@ -332,12 +337,11 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             self.sc1_calls=getattr(self,'sc1_calls',0)+1
                             continue
                         if w==0x44000022 and 0x4ec0<=pc<0x4f00:
-                            # PROBE 7k: DIRECT sc1 storage_send_device_command (248),
-                            # exactly as netemu fn_000135fc issues it (li r11,0xf8; sc 1,
-                            # no oris). Needs the sysmgr_ss ability patch A on hardware.
+                            # PROBE 7k/7p: DIRECT sc1 storage_send_device_command (248).
+                            lpar2=P+(((self.native_return+0x4000)&~0xfff)-E)
                             assert self.get('r11')==0xf8
                             assert (self.get('r3'),self.get('r4'),self.get('r6'),self.get('r8'))==(2,1,0x40,2048)
-                            assert self.get('r7')==getattr(self,'dma_addr',0x5000000)
+                            assert self.get('r7')==lpar2 and self.q(self.native_return+0x138)==lpar2
                             for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
                             for c in range(8): self.put('cr'+str(c),c^5)
                             self.put('lr',0x1028); self.put('ctr',0xdeadc0de); self.put('xer',7)
@@ -439,7 +443,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
-            assert getattr(m,'sc1_calls',0)==6 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
+            assert getattr(m,'sc1_calls',0)==9 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
             assert q[62:]==(0,0)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])

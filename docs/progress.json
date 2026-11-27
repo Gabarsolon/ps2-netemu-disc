@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-27",
-  "note": "9 probes (7g-7o): optical is open/DMA-able from PS2_NE but NOT a commandable storage device (storage_read + ATAPI 248 both -6 NO_ENTRY, even with patch A + full IRQ setup). Device-assignment wall (optical belongs to GameOS LPAR). Next: HV reassignment or GameOS->netemu bridge.",
+  "note": "Probe 7p: fixed -6 NO_ENTRY root cause (pass lpar2 not dma bus addr to ATAPI 248 + poll 254). SURVIVED + sstat=0 + async=0; data8=0 (READ(10) data-withholding gate). Next: INQUIRY control + auth gate.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
@@ -10,7 +10,7 @@
     {
       "name": "Netemu partition talks to the drive (open, DMA map, ATAPI commands)",
       "weight": 20,
-      "done": 99.8
+      "done": 99.9
     },
     {
       "name": "Level 1: read sector 16 (ISO9660 signature)",

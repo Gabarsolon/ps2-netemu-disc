@@ -71,11 +71,13 @@ extern u64 lv1_map_dma(u64,u64,u64,u64,u64,u64);
 extern u64 lv1_storage_read(u64,u64,u64,u64,u64,u64);
 /* HV 249 get_async_status(dev): returns the result word (&0xffffff==0 = done). */
 extern u64 lv1_get_async_status(u64);
-/* PROBE 7j: HV 248 storage_send_device_command(dev,cmd_id,cmd_block,size,data_buf,len).
- * cmd_id=1 = LV1_STORAGE_SEND_ATAPI_COMMAND. The stub returns the STATUS r3 (0 =
- * accepted, <0 = denied/needs patch A). Tried FORWARDED (sc0) first; a real ATAPI
- * read is normally a DIRECT sc1 that needs the sysmgr_ss ability patch A. */
+/* PROBE 7j/7p: HV 248 storage_send_device_command(dev,cmd_id,cmd_block,size,data_lpar,len).
+ * cmd_id=1 = LV1_STORAGE_SEND_ATAPI_COMMAND. Direct sc1 (needs live patch A).
+ * Stub packs ((u64)(u32)status<<32)|(u32)tag into r3 so C receives both status and tag. */
 extern u64 lv1_send_device_command(u64,u64,u64,u64,u64,u64);
+/* PROBE 7p: HV 254 storage_check_async_status(dev,tag) via forwarded sc0.
+ * Stub packs ((u64)(u32)rc<<32)|(u32)async_status into r3 (rc==0 = completed). */
+extern u64 lv1_check_async_status(u64,u64);
 /* Probe 7g: flush/invalidate `lines` 128-byte data-cache lines at `addr` so the
  * CPU load of the DMA target sees device-written data, not a stale cached line.
  * Hand-assembled stub (sync; mtctr; loop dcbf+addi; bdnz; sync; blr). dcbf is

@@ -116,6 +116,7 @@ lv1_get_async_status = 0x4e60;
 dcache_flush = 0x4ea0;
 lv1_send_device_command = 0x4ec0;
 lv1_connect_irq_plug = 0x4f00;
+lv1_check_async_status = 0x4f40;
 '''
     (OUT/'link.ld').write_text(linker)
     run([LLVM/'ld.lld.exe','-m','elf64ppc','-T',OUT/'link.ld','--no-undefined',
@@ -230,18 +231,26 @@ lv1_connect_irq_plug = 0x4f00;
         block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
         code[pc-SLOT:pc-SLOT+len(block)]=block
         listing.extend(rows); syms[name]=pc
-    # PROBE 7k: storage_send_device_command (248) via a DIRECT sc1 (li r11,0xf8; sc 1
-    # -- NO oris), exactly as netemu's own fn_000135fc issues it. 7j proved the
-    # forwarded bridge has no entry for 248 (-6). Direct sc1 needs the sysmgr_ss
-    # ability patch A applied live (patch_sysmgr_optical.py --apply) before launch.
-    # 6-in (dev,cmd_id,cmd_block,size,data_buf,len); stub returns the STATUS r3.
-    for name,pc,num in [('lv1_send_device_command',0x4ec0,248)]:
-        source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
-                f'li r11,{num}\nsc 1\nld r12,120(r1)\nmtcr r12\n'
-                f'addi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
-        block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
+    # PROBE 7k/7p: storage_send_device_command (248, direct sc1) and
+    # storage_check_async_status (254, forwarded sc0) both return (r3=status, r4=tag/async).
+    # Pack ((u64)(u32)r3<<32)|(u32)r4 into r3 so C gets both values without an out-pointer.
+    def emit_packed_sc(name,pc,num,direct_sc1,limit):
+        sc_seq=f'li r11,{num}\nsc 1\n' if direct_sc1 else f'li r11,{num}\noris r11,r11,0x8000\nsc 0\n'
+        pre_src='mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'+sc_seq
+        post_src='ld r12,120(r1)\nmtcr r12\naddi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n'
+        pack_ops=[(0x786307c6,'sldi','r3,r3,32'),
+                  (0x78840020,'clrldi','r4,r4,32'),
+                  (0x7c632378,'or','r3,r3,r4')]
+        b1,r1=asm(pre_src,pc)
+        pack_pc=pc+len(b1)
+        b2=b''.join(struct.pack('>I',w) for w,_,_ in pack_ops)
+        r2=[dict(address=pack_pc+4*i,word=f'{w:08x}',op=op,args=[args]) for i,(w,op,args) in enumerate(pack_ops)]
+        b3,r3=asm(post_src,pack_pc+len(b2))
+        block=b1+b2+b3
+        assert len(block)<=limit and pc+len(block)<=CSTART,(name,len(block),limit)
         code[pc-SLOT:pc-SLOT+len(block)]=block
-        listing.extend(rows); syms[name]=pc
+        listing.extend(r1+r2+r3); syms[name]=pc
+    emit_packed_sc('lv1_send_device_command',0x4ec0,248,True,64)
     # PROBE 7n: connect_irq_plug_ext (28) forwarded sc0, returns status r3. 2-in
     # (virq, port). ps2_emu attaches optical virq 9 to the event port after 197.
     for name,pc,num in [('lv1_connect_irq_plug',0x4f00,28)]:
@@ -251,6 +260,7 @@ lv1_connect_irq_plug = 0x4f00;
         block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
         code[pc-SLOT:pc-SLOT+len(block)]=block
         listing.extend(rows); syms[name]=pc
+    emit_packed_sc('lv1_check_async_status',0x4f40,254,False,128)
     # Probe 7g: dcache_flush(addr=r3, lines=r4) -- hand-assembled, no stores, no
     # sub-calls, no sc. Invalidates `lines` 128-byte D-cache lines at addr so the
     # CPU readback of the DMA target is the device-written sector, not a stale

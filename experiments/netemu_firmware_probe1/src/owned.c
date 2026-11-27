@@ -186,23 +186,46 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
              * poll -> read back. flash status==0 + nonzero data8 => our machinery is good
              * and the optical -6 is device-specific (ownership/registration). flash ALSO
              * -6 => the problem is our owned_startup context/timing, not the optical. */
+            /* PROBE 7p (ROOT-CAUSE FIX for -6 NO_ENTRY in 7j-7n): lv1.elf RE
+             * proved func_0x0025397c checks data_buf (arg5 / cdb[0x38]) against
+             * the LPAR memory-region RB-tree via func_0x002ce74c and returns -6
+             * when given the IOMMU bus address dma (0xc0000000) instead of lpar2.
+             * Switch back to optical (5,5,0), pass lpar2 in both CDB+0x38 and
+             * arg5 of send_device_command(248), poll check_async_status(254)
+             * with the returned tag up to 200k iterations (~250ms), invalidate
+             * ea2 with dcache_flush, and record data8 + packed (sstat,rc,async). */
             u64 o1=0,o2=0;
-            u64 of=(u64)(native_repo_enum(5,14,0,&o1,&o2)&0xff);   /* FLASH control */
+            u64 of=(u64)(native_repo_enum(5,5,0,&o1,&o2)&0xff);    /* OPTICAL */
             u64 bus=of?native_repo_busid(o1):0;
             u64 dev=of?native_repo_devid(o1,o2):0;
             u64 data8=0, w1=PROBE_NOCLOSE;
             if (of && lv1_open_device(bus,dev,0)==0) {
+                u64 port=lv1_event_rx_port();                  /* 18 -> port */
+                u64 cret=lv1_connect_irq_event(bus,dev,port,0); /* 197 -> status */
+                u64 pret=lv1_connect_irq_plug(9,port);         /* 28 -> status (virq 9) */
+                (void)port; (void)cret; (void)pret;
                 u64 dma=lv1_alloc_dma(bus,dev,0x1000,0xC,0);   /* 4KB io_pagesize (0xC) */
                 if (dma) {
                     u64 ea2=(alloc+0x4000)&~0xfffULL;        /* page-aligned free pool RAM */
                     u64 lpar2=p+(ea2-e);
                     u64 mret=lv1_map_dma(bus,dev,lpar2,dma,0x1000,0xe000000000000800ULL);
                     if (mret==0) {
-                        u64 sstat=lv1_storage_read(dev,2,0,1,4,dma);   /* flash region 2, LBA 0 */
-                        u64 res=0xffffffffffffffffULL;
-                        for (u32 i=0;i<200;++i) { res=lv1_get_async_status(dev); if ((res&0xffffff)==0) break; }
-                        data8=Q(ea2);                  /* flash sector 0 first 8 bytes */
-                        w1=(sstat<<48)|(res&0xffffffffffffULL);
+                        u64 cb=alloc+0x100;
+                        u64 cb_lpar=p+(cb-e);
+                        build_atapi(cb,16,lpar2);
+                        u64 scmd=lv1_send_device_command(dev,1,cb_lpar,0x40,lpar2,2048);
+                        u64 sstat=(scmd>>32)&0xffffffffULL;
+                        u64 tag=scmd&0xffffffffULL;
+                        u64 res=0xffffffff00000000ULL;
+                        if (sstat==0) {
+                            for (u32 i=0;i<200000;++i) {
+                                res=lv1_check_async_status(dev,tag);
+                                if ((res>>32)==0) break;
+                            }
+                        }
+                        dcache_flush(ea2,0x1000/128);
+                        data8=Q(ea2);
+                        w1=((sstat&0xffffULL)<<48)|(((res>>32)&0xffffffULL)<<24)|(res&0xffffffULL);
                     } else w1=(mret<<48)|0xBAD;
                 }
                 (void)lv1_close_device(bus,dev);

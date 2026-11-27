@@ -16,14 +16,14 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
-| Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 99.8% |
+| Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 99.9% |
 | Level 1: read sector 16 (ISO9660 signature) | 10% | `█████████░` 92.0% |
 | Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 15.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-27. 9 probes (7g-7o): optical is open/DMA-able from PS2_NE but NOT a commandable storage device (storage_read + ATAPI 248 both -6 NO_ENTRY, even with patch A + full IRQ setup). Device-assignment wall (optical belongs to GameOS LPAR). Next: HV reassignment or GameOS-&gt;netemu bridge._
+_Last update: 2026-11-27. Probe 7p: fixed -6 NO_ENTRY root cause (pass lpar2 not dma bus addr to ATAPI 248 + poll 254). SURVIVED + sstat=0 + async=0; data8=0 (READ(10) data-withholding gate). Next: INQUIRY control + auth gate._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
