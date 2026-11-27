@@ -173,6 +173,7 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
                         u64 tag=lv1_storage_read(dev,2,16,1,4,dma); (void)tag;
                         u64 res=0xffffffffffffffffULL;
                         for (u32 i=0;i<200;++i) { res=lv1_get_async_status(dev); if ((res&0xffffff)==0) break; }
+                        dcache_flush(ea2,0x1000/128);   /* probe 7g: invalidate stale cache before readback (lines) */
                         data8=Q(ea2);
                         w1=(mret<<48)|(res&0xffffffffffffULL);
                     } else w1=(mret<<48)|0xBAD;

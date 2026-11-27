@@ -113,6 +113,7 @@ lv1_alloc_dma = 0x4da0;
 lv1_map_dma = 0x4de0;
 lv1_storage_read = 0x4e20;
 lv1_get_async_status = 0x4e60;
+dcache_flush = 0x4ea0;
 '''
     (OUT/'link.ld').write_text(linker)
     run([LLVM/'ld.lld.exe','-m','elf64ppc','-T',OUT/'link.ld','--no-undefined',
@@ -224,6 +225,26 @@ lv1_get_async_status = 0x4e60;
         block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
         code[pc-SLOT:pc-SLOT+len(block)]=block
         listing.extend(rows); syms[name]=pc
+    # Probe 7g: dcache_flush(addr=r3, lines=r4) -- hand-assembled, no stores, no
+    # sub-calls, no sc. Invalidates `lines` 128-byte D-cache lines at addr so the
+    # CPU readback of the DMA target is the device-written sector, not a stale
+    # cached line. sync; mtctr r4; loop: dcbf 0,r3; addi r3,r3,128; bdnz loop;
+    # sync; blr. dcbf is unprivileged; a clean line is only invalidated.
+    pc=0x4ea0
+    dc_words=[0x7c0004ac,  # sync
+              0x7c8903a6,  # mtctr r4
+              0x7c0018ac,  # dcbf 0,r3
+              0x38630080,  # addi r3,r3,128
+              0x4200fff8,  # bdnz -8 (back to dcbf)
+              0x7c0004ac,  # sync
+              0x4e800020]  # blr
+    dc_ops=['sync','mtctr r4','dcbf 0,r3','addi r3,r3,128','bdnz -8','sync','blr']
+    dc_block=b''.join(struct.pack('>I',w) for w in dc_words)
+    assert pc+len(dc_block)<=CSTART
+    code[pc-SLOT:pc-SLOT+len(dc_block)]=dc_block
+    for i,(w,o) in enumerate(zip(dc_words,dc_ops)):
+        listing.append(dict(address=pc+4*i,word=f'{w:08x}',op=o,args=[]))
+    syms['dcache_flush']=pc
     aa=auditors['audit_assembly'](OUT/'payload_compiler.s',listing)
     # Own stack frames/trampolines are small compared with the traced 256KiB
     # control stack. Native helper depth/liveness retain their stock behavior.

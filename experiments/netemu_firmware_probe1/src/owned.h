@@ -67,6 +67,11 @@ extern u64 lv1_map_dma(u64,u64,u64,u64,u64,u64);
 extern u64 lv1_storage_read(u64,u64,u64,u64,u64,u64);
 /* HV 249 get_async_status(dev): returns the result word (&0xffffff==0 = done). */
 extern u64 lv1_get_async_status(u64);
+/* Probe 7g: flush/invalidate `lines` 128-byte data-cache lines at `addr` so the
+ * CPU load of the DMA target sees device-written data, not a stale cached line.
+ * Hand-assembled stub (sync; mtctr; loop dcbf+addi; bdnz; sync; blr). dcbf is
+ * unprivileged; a clean line is only invalidated. No stores, no sub-calls. */
+extern void dcache_flush(u64 addr,u64 lines);
 /* Probe result slots in the owned block, past the validated lease fields. */
 #define L_OPEN  L_END
 #define L_CLOSE (L_END+1)

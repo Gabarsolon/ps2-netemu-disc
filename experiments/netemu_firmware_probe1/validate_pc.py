@@ -331,6 +331,12 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                         # Ghidra's sync CALLOTHER has no memory-order execution
                         # model. Verify/count the fence word; advance explicitly.
                         self.barriers+=1; self.pc(pc+4); continue
+                    if op==31 and (w>>1&1023)==86:
+                        # dcbf (probe 7g cache flush). Pure cache-management hint:
+                        # no architectural register/memory effect, unprivileged,
+                        # clean-line = invalidate only. Ghidra models it as a
+                        # CALLOTHER with no execution semantics; count + advance.
+                        self.dcbf=getattr(self,'dcbf',0)+1; self.pc(pc+4); continue
                     # Read TB's compiler-selected destination, before stepping.
                     if op==31 and (w>>1&1023) in (339,371) and ((w>>16&31)|((w>>11&31)<<5)) in (268,269):
                         self.put('r'+str(w>>21&31),self.now); self.pc(pc+4); continue
