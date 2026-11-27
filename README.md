@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-27. 2026-11-27 PROBE 7f: THE FULL OPTICAL READ CHAIN SUCCEEDS on console. open(4,2,0)=0 -&gt; allocate_device_dma_region(174, io_pagesize 0xC=4KB) -&gt; map_device_dma_region(176)=0 (page-aligned free-pool DMA buffer; the 0xC pagesize + page-alignment were the fixes) -&gt; storage_read(245) LBA 16 -&gt; poll get_async_status(249) result=0 (COMPLETE). All forwarded sc0, no patch A, survived. Remaining: the readback Q(ea2)=0 despite result=0 -- likely DMA cache-coherency (stale CPU cache line; netemu copies via FUN_00118a90) or disc-ready/LBA. Next (7g): cache flush/invalidate before readback or use netemu's copy helper._
+_Last update: 2026-11-27. probe 7g: dcbf cache-flush ruled out; EIB DMA is coherent so data8=0 = no transfer. Root cause = DMA buffer mapped into netemu RAM not its 0x70000000 DMA window. Next: map optical DMA into the real window._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.

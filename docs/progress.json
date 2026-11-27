@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-27",
-  "note": "2026-11-27 PROBE 7f: THE FULL OPTICAL READ CHAIN SUCCEEDS on console. open(4,2,0)=0 -> allocate_device_dma_region(174, io_pagesize 0xC=4KB) -> map_device_dma_region(176)=0 (page-aligned free-pool DMA buffer; the 0xC pagesize + page-alignment were the fixes) -> storage_read(245) LBA 16 -> poll get_async_status(249) result=0 (COMPLETE). All forwarded sc0, no patch A, survived. Remaining: the readback Q(ea2)=0 despite result=0 -- likely DMA cache-coherency (stale CPU cache line; netemu copies via FUN_00118a90) or disc-ready/LBA. Next (7g): cache flush/invalidate before readback or use netemu's copy helper.",
+  "note": "probe 7g: dcbf cache-flush ruled out; EIB DMA is coherent so data8=0 = no transfer. Root cause = DMA buffer mapped into netemu RAM not its 0x70000000 DMA window. Next: map optical DMA into the real window.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
