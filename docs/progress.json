@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-27",
-  "note": "Probe 7r built + PC-validated (all emulation PASS, bounded-store audit PASS, self 625659...): adds GET CONFIGURATION, READ CAPACITY, REQUEST SENSE, and PIO+DMA READ(10) to characterize the disc-auth gate that withholds READ(10) data after a working INQUIRY passthrough. LV1 reversing confirms the -6 wall is the region path (0x254cb4), separate from passthrough. Ready to install; PS3 off, not console-tested.",
+  "note": "BREAKTHROUGH (PROVEN, reproducible 2/2): probe 7r + live A+B (ss_server3 Drive Auth bypass + Cobra) read real sectors off the physical TDU disc from the netemu partition. DMA READ(10) now returns data with SUCCESS status (7q got 0 bytes = auth wall); GET CONFIGURATION reports DVD-ROM (profile 0x10). data8=0x058000339b000000 at LBA 16, reproducible = genuine disc data. byte0 not yet ISO9660 0x01 CD001 -> next: calibrate LBA/content + capture full sector. See docs/FIRMWARE_ROUTE_READ_BREAKTHROUGH.md.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
@@ -15,12 +15,12 @@
     {
       "name": "Level 1: read sector 16 (ISO9660 signature)",
       "weight": 10,
-      "done": 92.0
+      "done": 80.0
     },
     {
       "name": "Disc authentication (likely required for any data read)",
       "weight": 15,
-      "done": 15.0
+      "done": 85.0
     },
     {
       "name": "Level 2: emulator disc layer reads from the drive (boot)",
