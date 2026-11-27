@@ -229,13 +229,14 @@ lv1_send_device_command = 0x4ec0;
         block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
         code[pc-SLOT:pc-SLOT+len(block)]=block
         listing.extend(rows); syms[name]=pc
-    # PROBE 7j: storage_send_device_command (248) via the FORWARDED guest-sc bridge
-    # (li r11,0xf8; oris r11,r11,0x8000; sc 0), tried without patch A. 6-in
-    # (dev,cmd_id,cmd_block,size,data_buf,len); HV returns status r3 + tag r4. The
-    # stub returns the STATUS r3 (0 = accepted, <0 = denied -> needs direct sc1 + A).
+    # PROBE 7k: storage_send_device_command (248) via a DIRECT sc1 (li r11,0xf8; sc 1
+    # -- NO oris), exactly as netemu's own fn_000135fc issues it. 7j proved the
+    # forwarded bridge has no entry for 248 (-6). Direct sc1 needs the sysmgr_ss
+    # ability patch A applied live (patch_sysmgr_optical.py --apply) before launch.
+    # 6-in (dev,cmd_id,cmd_block,size,data_buf,len); stub returns the STATUS r3.
     for name,pc,num in [('lv1_send_device_command',0x4ec0,248)]:
         source=(f'mflr r0\nstd r0,16(r1)\nstdu r1,-128(r1)\nmfcr r12\nstd r12,120(r1)\n'
-                f'li r11,{num}\noris r11,r11,0x8000\nsc 0\nld r12,120(r1)\nmtcr r12\n'
+                f'li r11,{num}\nsc 1\nld r12,120(r1)\nmtcr r12\n'
                 f'addi r1,r1,128\nld r0,16(r1)\nmtlr r0\nblr\n')
         block,rows=asm(source,pc); assert len(block)<=64 and pc+len(block)<=CSTART
         code[pc-SLOT:pc-SLOT+len(block)]=block

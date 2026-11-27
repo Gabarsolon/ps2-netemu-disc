@@ -327,6 +327,18 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             self.pc(pc+4)
                             self.sc1_calls=getattr(self,'sc1_calls',0)+1
                             continue
+                        if w==0x44000022 and 0x4ec0<=pc<0x4f00:
+                            # PROBE 7k: DIRECT sc1 storage_send_device_command (248),
+                            # exactly as netemu fn_000135fc issues it (li r11,0xf8; sc 1,
+                            # no oris). Needs the sysmgr_ss ability patch A on hardware.
+                            assert self.get('r11')==0xf8
+                            assert (self.get('r3'),self.get('r4'),self.get('r6'),self.get('r8'))==(2,1,0x40,2048)
+                            assert self.get('r7')==getattr(self,'dma_addr',0x5000000)
+                            for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
+                            for c in range(8): self.put('cr'+str(c),c^5)
+                            self.put('lr',0x1028); self.put('ctr',0xdeadc0de); self.put('xer',7)
+                            self.put('r4',getattr(self,'send_tag',0x9)); self.put('r3',getattr(self,'send_status',0))
+                            self.pc(pc+4); self.sc1_calls=getattr(self,'sc1_calls',0)+1; continue
                         assert pc in (0x11a608,0x11a5fc) and w==0x44000002
                         old=self.irq; assert not old&0x4000
                         if pc==0x11a608:
