@@ -118,3 +118,30 @@ is known.
 Open risk: the auth may still require the secure module's per-disc key that only
 ss_server3 holds; 7v will show empirically whether the raw CDB sequence unlocks
 content or returns an auth/again status.
+
+## Extracted softemu ATAPI command set (PROVEN by disasm, local_only/softemu_region_asm.txt)
+
+The softemu CDVD handlers (0x88c88..0x8a000) build these CDBs and send via LV1
+248 (`cdvd_send_atapi_command` 0x88C88):
+- `0x1b` START STOP UNIT (spin up) — 0x88e60, 0x89bbc
+- `0x43` READ TOC — 0x8906c (0x400-byte reply, BCD track conversion)
+- `0x46` GET CONFIGURATION — 0x893e0, 0x89d18 (device type: 0xff61 PS2 DVD -> 0x14)
+- `0x2b` (SEEK/read-position, 32-bit LBA in CDB bytes 2-5) — 0x88f10
+- `0xAD` READ DVD STRUCTURE — 0x892d4 (format in byte7 = 0x00/0x04, layer in
+  byte6, 0x810-byte reply = DVD physical format / **copyright/disc-key structure**)
+- `0xBB` SET CD SPEED — 0x89cb8 (via `cdvd_send_device_command` 0x88B9C)
+
+`0xAD` READ DVD STRUCTURE with a key/copyright format code is the most likely
+disc-key read (returns the 16-byte key regions the auth caller FUN_0022130c
+descrambles). The sector **data** read CDB and the exact command-0x4b mapping are
+still behind the softemu's computed-jump dispatch table (Ghidra did not resolve
+it; refs to the handlers are neither CALL nor DATA).
+
+## Precise remaining RE target (for execution)
+
+Crack the softemu CDVD command dispatch: the command code (block +0x40, e.g.
+0x4b) selects a handler via a computed branch near the worker that reads globals
+-0x5858/-0x5848/-0x5830. Either (a) force-disassemble + define the worker and
+read its jump/switch, or (b) empirically in probe 7v send the extracted setup
+sequence (0x1b -> 0x43 -> 0x46 -> 0xAD key-format) then READ(10) / a candidate
+PS2 read, and observe whether content unlocks. 7v is the next build.
