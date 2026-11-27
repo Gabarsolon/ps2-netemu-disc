@@ -254,11 +254,11 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             ptr=self.get('r5'); assert self.stack(ptr,512)
                             sec=self.rd(ptr,512); q=struct.unpack('>64Q',sec)
                             assert q[0:2]==(0x4f574e5345433100,0x1000000000200) and q[4:7]==(0xb46100,2,expected)
-                            # probe 7d: w0 = sector first 8 bytes read back from the
-                            # DMA scratch (0 in emulation, no real DMA); w1 =
-                            # (map_ret<<48)|(async_result&0xffffffffffff).
+                            # probe 7r: data8 = READ-CAP/profile/flags (0 in emulation,
+                            # no real DMA so all drive reads return 0); w1 = sense/status
+                            # (also 0 under emulation). Both run_atapi paths return 0 here.
                             _w0=0
-                            _w1=((0x4e4f<<48)|(getattr(self,'map_ret',0)<<48)|(getattr(self,'async_result',0)&0xffffffffffff))&MASK
+                            _w1=0
                             expected_probe=(_w0,_w1) if (q[2]>>32)==1 else (0,0)
                             assert q[8:20]==tuple(self.state()) and q[62:]==expected_probe
                             self.sectors.append(sec); self.ret(self.write_rc)
@@ -301,12 +301,13 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             elif hv==245:
                                 assert self.get('r3')==2 and self.get('r4') in (0,1,2) and (self.get('r6'),self.get('r7'))==(1,4)
                             elif hv==248:
-                                # ATAPI send_device_command: INQUIRY(36, lpar2) or READ10(2048, lpar2+0x800).
-                                lpar2=P+(((self.native_return+0x4000)&~0xfff)-E)
-                                buf=lpar2 if self.get('r8')==36 else lpar2+0x800
+                                # ATAPI send_device_command (7r: INQUIRY/GET CONFIG/READ CAP/
+                                # REQUEST SENSE/READ10 PIO+DMA). Probe picks its own EA/lpar per
+                                # call; validate the ABI invariant, not a fixed buffer layout.
+                                buf=self.get('r7')
                                 assert (self.get('r3'),self.get('r4'),self.get('r6'))==(2,1,0x40)
-                                assert self.get('r8') in (36,2048)
-                                assert self.get('r7')==buf and self.q(self.native_return+0x138)==buf
+                                assert 0<self.get('r8')<=2048
+                                assert self.q(self.native_return+0x138)==buf
                             elif hv==249:
                                 assert self.get('r3')==2
                             elif hv==254:
@@ -338,13 +339,13 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             self.sc1_calls=getattr(self,'sc1_calls',0)+1
                             continue
                         if w==0x44000022 and 0x4ec0<=pc<0x4f00:
-                            # PROBE 7k/7p/7q: DIRECT sc1 storage_send_device_command (248).
-                            lpar2=P+(((self.native_return+0x4000)&~0xfff)-E)
-                            buf=lpar2 if self.get('r8')==36 else lpar2+0x800
+                            # PROBE 7k/7p/7q/7r: DIRECT sc1 storage_send_device_command (248).
+                            # 7r issues 6 varied-length commands; check ABI, not fixed layout.
+                            buf=self.get('r7')
                             assert self.get('r11')==0xf8
                             assert (self.get('r3'),self.get('r4'),self.get('r6'))==(2,1,0x40)
-                            assert self.get('r8') in (36,2048)
-                            assert self.get('r7')==buf and self.q(self.native_return+0x138)==buf
+                            assert 0<self.get('r8')<=2048
+                            assert self.q(self.native_return+0x138)==buf
                             for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
                             for c in range(8): self.put('cr'+str(c),c^5)
                             self.put('lr',0x1028); self.put('ctr',0xdeadc0de); self.put('xer',7)
@@ -446,9 +447,9 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
-            assert getattr(m,'sc1_calls',0)==11 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
+            assert getattr(m,'sc1_calls',0)==19 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
-            assert q[62:]==(0,0x4e4f000000000000)
+            assert q[62:]==(0,0)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])
             n=len(m.calls); m.call('shutdown'); assert m.calls[n:]==['original_shutdown']
             m.call('refresh'); assert m.reason_stores==1

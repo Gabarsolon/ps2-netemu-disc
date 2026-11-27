@@ -102,7 +102,8 @@ static __attribute__((noinline)) u64 run_atapi(
         }
     }
     dcache_flush(buf_ea,lines);
-    return ((sstat&0xffffULL)<<48)|(((res>>32)&0xffffffULL)<<24)|(res&0xffffffULL);
+    u64 hi=sstat ? (0x80000000ULL | (sstat & 0x7fffffffULL)) : ((res>>32)&0xffffffffULL);
+    return (hi<<32)|(res&0xffffffffULL);
 }
 
 /* Firmware-route probe store. Block base arrives as an arg (same bounded pattern
@@ -220,19 +221,41 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
                     if (mret==0) {
                         u64 cb=alloc+0x100;
                         u64 cb_lpar=p+(cb-e);
-                        u64 st_inq=run_atapi(dev,cb,cb_lpar,ea2,lpar2,36,1,
+                        (void)run_atapi(dev,cb,cb_lpar,ea2,lpar2,36,1,
                             0x1200000024000000ULL,0ULL,
                             0x0000000C00000024ULL,0x0000000100000001ULL);
                         u64 inq8=Q(ea2+8);
-                        u64 st_rd=run_atapi(dev,cb,cb_lpar,ea2+0x800,lpar2+0x800,2048,16,
+                        (void)run_atapi(dev,cb,cb_lpar,ea2+0x100,lpar2+0x100,32,1,
+                            0x4600000000000000ULL,0x2000000000000000ULL,
+                            0x0000000C00000020ULL,0x0000000100000001ULL);
+                        u64 prof16=Q(ea2+0x100)&0xffffULL;
+                        (void)run_atapi(dev,cb,cb_lpar,ea2+0x200,lpar2+0x200,8,1,
+                            0x2500000000000000ULL,0ULL,
+                            0x0000000C00000008ULL,0x0000000100000001ULL);
+                        u64 cap_lba=(Q(ea2+0x200)>>32)&0xffffffffULL;
+                        u64 st_pio=run_atapi(dev,cb,cb_lpar,ea2+0x800,lpar2+0x800,2048,16,
+                            0x2800000000100000ULL,0x0100000000000000ULL,
+                            0x0000000C00000800ULL,0x0000000100000001ULL);
+                        u64 rd_pio=Q(ea2+0x800);
+                        (void)run_atapi(dev,cb,cb_lpar,ea2+0x300,lpar2+0x300,18,1,
+                            0x0300000012000000ULL,0ULL,
+                            0x0000000C00000012ULL,0x0000000100000001ULL);
+                        u64 s0=Q(ea2+0x300);
+                        u64 s1=Q(ea2+0x308);
+                        u64 sense24=(((s0>>40)&0xffULL)<<16)|(((s1>>24)&0xffULL)<<8)|((s1>>16)&0xffULL);
+                        u64 st_dma=run_atapi(dev,cb,cb_lpar,ea2,lpar2,2048,16,
                             0x2800000000100000ULL,0x0100000000000000ULL,
                             0x0000000C00000001ULL,0x0000080000000003ULL);
-                        u64 rd8=Q(ea2+0x800);
-                        data8=(rd8!=0)?rd8:inq8;
-                        u64 tagmark=(rd8!=0)?0x5244ULL:(inq8!=0?0x4951ULL:0x4e4fULL);
-                        w1=(tagmark<<48)
-                           |((((st_inq>>48)&0xffULL)<<40)|(((st_inq>>24)&0xfULL)<<36)|((st_inq&0xfULL)<<32))
-                           |((((st_rd>>48)&0xffULL)<<24)|(((st_rd>>24)&0xffULL)<<16)|(st_rd&0xffffULL));
+                        u64 rd_dma=Q(ea2);
+                        if (rd_pio!=0 || rd_dma!=0) {
+                            data8=(rd_pio!=0)?rd_pio:rd_dma;
+                            w1=(((rd_pio!=0)?0x5049ULL:0x444dULL)<<48)|((prof16&0xffffULL)<<32)
+                                |((rd_pio!=0)?(st_pio&0xffffffffULL):(st_dma&0xffffffffULL));
+                        } else {
+                            u64 flags=((inq8!=0?1ULL:0ULL)<<15)|(((st_pio>>32)!=0?1ULL:0ULL)<<14)|(((st_dma>>32)!=0?1ULL:0ULL)<<13)|((s0>>56)&0xffULL);
+                            data8=((cap_lba&0xffffffffULL)<<32)|((prof16&0xffffULL)<<16)|flags;
+                            w1=((sense24&0xffffffULL)<<40)|(((st_pio>>24)&0xffULL)<<32)|(st_dma&0xffffffffULL);
+                        }
                     } else w1=(mret<<48)|0xBAD;
                 }
                 (void)lv1_close_device(bus,dev);
