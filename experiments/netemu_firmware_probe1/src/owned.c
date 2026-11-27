@@ -75,6 +75,24 @@ static __attribute__((noinline)) void initialize(u64 a,u64 p,u64 e,u64 boot,
     fence(); l[L_MAGIC]=LEASE; fence();
 }
 
+/* PROBE 7j: build an lv1_atapi_cmnd_block (0x40 bytes) in an owned-block scratch
+ * slot (arg0, same bounded pattern as initialize/probe_store). Layout matches LV1
+ * / ps2_emu fn_00022138: pkt[0x20] (CDB), pktlen@0x20, blocks@0x24, block_size@0x28,
+ * proto@0x2c, in_out@0x30, buffer@0x38. CDB = SCSI READ(10): 0x28, LBA(4 BE) at
+ * bytes 2..5, transfer length (2 BE)=1 at bytes 7..8. proto=3 (DMA), in_out=1 (read),
+ * block_size=2048, buffer = the DMA bus address. */
+static __attribute__((noinline)) void build_atapi(u64 a,u64 lba,u64 dma) {
+    volatile u64 *s=(volatile u64 *)a;
+    s[0]=0x2800000000000000ULL|((lba&0xffffffffULL)<<16); /* 28 00 LBA[2..5] 00 TLhi */
+    s[1]=0x0100000000000000ULL;                            /* TLlo=01, rest 0 */
+    s[2]=0; s[3]=0;
+    s[4]=0x0000000C00000001ULL;  /* pktlen=12, blocks=1 */
+    s[5]=0x0000080000000003ULL;  /* block_size=2048, proto=3 (DMA) */
+    s[6]=0x0000000100000000ULL;  /* in_out=1 (read), pad=0 */
+    s[7]=dma;                    /* buffer = DMA bus address */
+    fence();
+}
+
 /* Firmware-route probe store. Block base arrives as an arg (same bounded pattern
  * as initialize): stores land only in free owned-block slots past the lease. */
 static __attribute__((noinline)) void probe_store(u64 a,u64 oret,u64 cret) {
@@ -170,23 +188,26 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
                     u64 lpar2=p+(ea2-e);
                     u64 mret=lv1_map_dma(bus,dev,lpar2,dma,0x1000,0xe000000000000800ULL);
                     if (mret==0) {
-                        /* PROBE 7i (diagnostic, safe): 7h proved storage_read(region=2) is
-                         * REJECTED with status -6 (0xfffffffa = LV1_NO_ENTRY): region 2 does
-                         * not exist on the optical, and the res=0 "completion" was a phantom
-                         * (no async op). The optical is likely an ATAPI node (read via
-                         * send_device_command(248)+CDB, needs patch A), not a region block
-                         * device. Before committing to the patch-A/ATAPI path, cheaply test
-                         * whether ANY forwarded storage_read region works: try region 0 and
-                         * region 1 and capture both statuses. The stub returns status r3.
-                         * sr0==0 or sr1==0 => a readable region exists (stay no-patch-A);
-                         * both -6 => no storage region => go ATAPI/248 + patch A. */
-                        u64 sr0=lv1_storage_read(dev,0,16,1,4,dma);
-                        u64 sr1=lv1_storage_read(dev,1,16,1,4,dma);
+                        /* PROBE 7j (ATAPI read): 7h/7i proved the optical has NO storage_read
+                         * regions (0/1/2 all -6). It is an ATAPI node -> raw read via
+                         * send_device_command(248) + a READ(10) CDB. 248 is normally a DIRECT
+                         * sc1 (needs patch A); we FIRST try it FORWARDED (sc0 bridge, no patch
+                         * A) in case the bridge whitelists it. Build the ATAPI command block in
+                         * an owned-block scratch slot (alloc+0x100, past the lease/probe slots,
+                         * before the integrity-checked command/data patterns at +0x1040), issue
+                         * 248 (dev=2, cmd_id=1, cmd_block_lpar, size 0x40, data=dma, len 2048),
+                         * poll get_async_status(249), read the sector back from ea2 (EIB-
+                         * coherent). send_status==0 + data8 = 01 "CD001" 01 => DISC READ WORKS.
+                         * send_status<0 forwarded => not whitelisted -> 7k applies patch A +
+                         * direct sc1. */
+                        u64 cb=alloc+0x100;            /* owned-block scratch for the command block */
+                        u64 cb_lpar=p+(cb-e);
+                        build_atapi(cb,16,dma);
+                        u64 sstat=lv1_send_device_command(dev,1,cb_lpar,0x40,dma,2048);
                         u64 res=0xffffffffffffffffULL;
                         for (u32 i=0;i<200;++i) { res=lv1_get_async_status(dev); if ((res&0xffffff)==0) break; }
-                        (void)ea2;
-                        data8=((sr0&0xffffULL)<<16)|(sr1&0xffffULL);   /* [31:16]=region0 status, [15:0]=region1 */
-                        w1=(mret<<48)|(res&0xffffffffffffULL);
+                        data8=Q(ea2);                  /* sector first 8 bytes (expect 0x0143443030310100) */
+                        w1=(sstat<<48)|(res&0xffffffffffffULL);
                     } else w1=(mret<<48)|0xBAD;
                 }
                 (void)lv1_close_device(bus,dev);

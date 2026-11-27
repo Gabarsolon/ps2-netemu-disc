@@ -142,7 +142,11 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                         if native: self.nativewrites+=1
                         else: self.payloadwrites+=1
                     if self.owned(a,width):
-                        probe_slot=(a-self.allocations[0][0]) in (176,184,192) and width==8
+                        off=a-self.allocations[0][0]
+                        # probe result slots (176/184/192) and the probe 7j ATAPI command
+                        # block scratch (alloc+0x100 .. +0x138, 8 words) -- both are owned-RW
+                        # stores the probe makes after acquiring the block.
+                        probe_slot=(off in (176,184,192) or 0x100<=off<=0x138) and width==8
                         assert not native and self.native_return is not None and (probe_slot or not self.irq&0x8000)
                         self.heapwrites+=1
                     if a==REASON:
@@ -281,7 +285,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                     if op==17:
                         if w==0x44000002 and 0x4c60<=pc<0x5000:
                             r11=self.get('r11'); assert (r11>>16)==0x8000,'forwarded sc0 bridge bit'
-                            hv=r11&0xffff; assert hv in (170,171,18,197,174,176,245,249)
+                            hv=r11&0xffff; assert hv in (170,171,18,197,174,176,245,248,249)
                             if hv==170:
                                 assert (self.get('r3'),self.get('r4'),self.get('r5'))==(4,2,0)
                             elif hv==171:
@@ -294,6 +298,11 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                                 assert (self.get('r3'),self.get('r4'))==(4,2) and self.get('r7')==0x1000 and self.get('r8')==0xe000000000000800
                             elif hv==245:
                                 assert self.get('r3')==2 and self.get('r4') in (0,1,2) and (self.get('r5'),self.get('r6'),self.get('r7'))==(16,1,4)
+                            elif hv==248:
+                                # ATAPI send_device_command: dev=2, cmd_id=1, cmd_block size
+                                # 0x40, data buffer = the modeled DMA addr, len 2048.
+                                assert (self.get('r3'),self.get('r4'),self.get('r6'),self.get('r8'))==(2,1,0x40,2048)
+                                assert self.get('r7')==getattr(self,'dma_addr',0x5000000)
                             elif hv==249:
                                 assert self.get('r3')==2
                             for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
@@ -311,6 +320,8 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                                 self.put('r4',getattr(self,'read_tag',0x7)); self.put('r3',0)
                             elif hv==249:
                                 self.put('r5',getattr(self,'async_result',0)); self.put('r3',0)
+                            elif hv==248:
+                                self.put('r4',getattr(self,'send_tag',0x9)); self.put('r3',getattr(self,'send_status',0))
                             else:
                                 self.put('r3',getattr(self,'lv1_open_ret',0) if hv==170 else getattr(self,'lv1_close_ret',0))
                             self.pc(pc+4)
@@ -412,7 +423,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
-            assert getattr(m,'sc1_calls',0)==7 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
+            assert getattr(m,'sc1_calls',0)==6 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
             assert q[62:]==(0,0)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])

@@ -16,7 +16,8 @@ def audit_ir(path):
             'stock_ufs_open','stock_ufs_stat','stock_raw_write','stock_ufs_close',
             'lv1_open_device','lv1_close_device','lv1_event_rx_port','lv1_connect_irq_event',
             'native_repo_enum','native_repo_devid','native_repo_busid','lv1_alloc_dma',
-            'lv1_map_dma','lv1_storage_read','lv1_get_async_status','dcache_flush'}
+            'lv1_map_dma','lv1_storage_read','lv1_get_async_status','dcache_flush',
+            'lv1_send_device_command'}
     defined={f.name for f in mod.functions if not f.is_declaration}
     for f in mod.functions:
         definitions={str(i):i for b in f.blocks for i in b.instructions}
@@ -49,7 +50,7 @@ def audit_ir(path):
             key=str(v)
             if key in args:
                 n=args[key]
-                if f.name in ('initialize','probe_store') and n==0:return ('owned',0,0,8192)
+                if f.name in ('initialize','probe_store','build_atapi') and n==0:return ('owned',0,0,8192)
                 assert f.name=='admit' and n in (2,3),(f.name,key)
                 return ('caller_stack_'+str(n),0,0,8)
             if v.is_constant:
@@ -112,7 +113,7 @@ def audit_ir(path):
                     assert str(ops[0].type) in ('i8','i32','i64'),str(i)
                     r=roots(ops[1]); dynamic=any(x.startswith('arg') for x in r)
                     if dynamic:
-                        if f.name in ('initialize','probe_store'):
+                        if f.name in ('initialize','probe_store','build_atapi'):
                             assert {x for x in r if x.startswith('arg')}=={'arg0'},r
                             category='fresh_owned_A: state[0,1000), C[0,40), data[0,800)'
                         else:
