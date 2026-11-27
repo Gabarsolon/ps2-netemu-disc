@@ -258,7 +258,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             # DMA scratch (0 in emulation, no real DMA); w1 =
                             # (map_ret<<48)|(async_result&0xffffffffffff).
                             _w0=0
-                            _w1=((getattr(self,'map_ret',0)<<48)|(getattr(self,'async_result',0)&0xffffffffffff))&MASK
+                            _w1=((0x4e4f<<48)|(getattr(self,'map_ret',0)<<48)|(getattr(self,'async_result',0)&0xffffffffffff))&MASK
                             expected_probe=(_w0,_w1) if (q[2]>>32)==1 else (0,0)
                             assert q[8:20]==tuple(self.state()) and q[62:]==expected_probe
                             self.sectors.append(sec); self.ret(self.write_rc)
@@ -301,11 +301,12 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             elif hv==245:
                                 assert self.get('r3')==2 and self.get('r4') in (0,1,2) and (self.get('r6'),self.get('r7'))==(1,4)
                             elif hv==248:
-                                # ATAPI send_device_command: dev=2, cmd_id=1, cmd_block size
-                                # 0x40, data_buf = lpar2 (LPAR address of ea2), len 2048.
+                                # ATAPI send_device_command: INQUIRY(36, lpar2) or READ10(2048, lpar2+0x800).
                                 lpar2=P+(((self.native_return+0x4000)&~0xfff)-E)
-                                assert (self.get('r3'),self.get('r4'),self.get('r6'),self.get('r8'))==(2,1,0x40,2048)
-                                assert self.get('r7')==lpar2 and self.q(self.native_return+0x138)==lpar2
+                                buf=lpar2 if self.get('r8')==36 else lpar2+0x800
+                                assert (self.get('r3'),self.get('r4'),self.get('r6'))==(2,1,0x40)
+                                assert self.get('r8') in (36,2048)
+                                assert self.get('r7')==buf and self.q(self.native_return+0x138)==buf
                             elif hv==249:
                                 assert self.get('r3')==2
                             elif hv==254:
@@ -337,11 +338,13 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             self.sc1_calls=getattr(self,'sc1_calls',0)+1
                             continue
                         if w==0x44000022 and 0x4ec0<=pc<0x4f00:
-                            # PROBE 7k/7p: DIRECT sc1 storage_send_device_command (248).
+                            # PROBE 7k/7p/7q: DIRECT sc1 storage_send_device_command (248).
                             lpar2=P+(((self.native_return+0x4000)&~0xfff)-E)
+                            buf=lpar2 if self.get('r8')==36 else lpar2+0x800
                             assert self.get('r11')==0xf8
-                            assert (self.get('r3'),self.get('r4'),self.get('r6'),self.get('r8'))==(2,1,0x40,2048)
-                            assert self.get('r7')==lpar2 and self.q(self.native_return+0x138)==lpar2
+                            assert (self.get('r3'),self.get('r4'),self.get('r6'))==(2,1,0x40)
+                            assert self.get('r8') in (36,2048)
+                            assert self.get('r7')==buf and self.q(self.native_return+0x138)==buf
                             for r in [0,*range(4,13)]: self.put('r'+str(r),0xdeadbeef00000000+r)
                             for c in range(8): self.put('cr'+str(c),c^5)
                             self.put('lr',0x1028); self.put('ctr',0xdeadc0de); self.put('xer',7)
@@ -443,9 +446,9 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert m.phase()==4 and len(m.sectors)==1
             q=struct.unpack('>64Q',m.sectors[0]); assert q[23]==0x2000 and q[26]==P+a-E
             assert q[7]==a
-            assert getattr(m,'sc1_calls',0)==9 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
+            assert getattr(m,'sc1_calls',0)==11 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
-            assert q[62:]==(0,0)
+            assert q[62:]==(0,0x4e4f000000000000)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])
             n=len(m.calls); m.call('shutdown'); assert m.calls[n:]==['original_shutdown']
             m.call('refresh'); assert m.reason_stores==1

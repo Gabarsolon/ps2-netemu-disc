@@ -75,22 +75,34 @@ static __attribute__((noinline)) void initialize(u64 a,u64 p,u64 e,u64 boot,
     fence(); l[L_MAGIC]=LEASE; fence();
 }
 
-/* PROBE 7j: build an lv1_atapi_cmnd_block (0x40 bytes) in an owned-block scratch
- * slot (arg0, same bounded pattern as initialize/probe_store). Layout matches LV1
- * / ps2_emu fn_00022138: pkt[0x20] (CDB), pktlen@0x20, blocks@0x24, block_size@0x28,
- * proto@0x2c, in_out@0x30, buffer@0x38. CDB = SCSI READ(10): 0x28, LBA(4 BE) at
- * bytes 2..5, transfer length (2 BE)=1 at bytes 7..8. proto=3 (DMA), in_out=1 (read),
- * block_size=2048, buffer = the DMA bus address. */
-static __attribute__((noinline,unused)) void build_atapi(u64 a,u64 lba,u64 dma) {
+/* PROBE 7j/7q: build an lv1_atapi_cmnd_block (0x40 bytes) in an owned-block
+ * scratch slot (arg0). Layout matches LV1 / ps2_emu fn_00022138: pkt[0x20],
+ * pktlen@0x20, blocks@0x24, block_size@0x28, proto@0x2c, in_out@0x30, buffer@0x38.
+ * Returns packed ((sstat&0xffff)<<48)|(((rc&0xffffff)<<24)|(async&0xffffff))
+ * with ZERO out-pointers so audit_ir stays unchanged. */
+static __attribute__((noinline,unused)) void build_atapi(
+        u64 a,u64 w0,u64 w1,u64 w4,u64 w5,u64 lpar) {
     volatile u64 *s=(volatile u64 *)a;
-    s[0]=0x2800000000000000ULL|((lba&0xffffffffULL)<<16); /* 28 00 LBA[2..5] 00 TLhi */
-    s[1]=0x0100000000000000ULL;                            /* TLlo=01, rest 0 */
-    s[2]=0; s[3]=0;
-    s[4]=0x0000000C00000001ULL;  /* pktlen=12, blocks=1 */
-    s[5]=0x0000080000000003ULL;  /* block_size=2048, proto=3 (DMA) */
-    s[6]=0x0000000100000000ULL;  /* in_out=1 (read), pad=0 */
-    s[7]=dma;                    /* buffer = DMA bus address */
+    s[0]=w0; s[1]=w1; s[2]=0; s[3]=0;
+    s[4]=w4; s[5]=w5; s[6]=0x0000000100000000ULL; s[7]=lpar;
     fence();
+}
+static __attribute__((noinline)) u64 run_atapi(
+        u64 dev,u64 cb,u64 cb_lpar,u64 buf_ea,u64 buf_lpar,
+        u64 len,u64 lines,u64 w0,u64 w1,u64 w4,u64 w5) {
+    build_atapi(cb,w0,w1,w4,w5,buf_lpar);
+    u64 scmd=lv1_send_device_command(dev,1,cb_lpar,0x40,buf_lpar,len);
+    u64 sstat=(scmd>>32)&0xffffffffULL;
+    u64 tag=scmd&0xffffffffULL;
+    u64 res=0xffffffff00000000ULL;
+    if (sstat==0) {
+        for (u32 i=0;i<200000;++i) {
+            res=lv1_check_async_status(dev,tag);
+            if ((res>>32)==0) break;
+        }
+    }
+    dcache_flush(buf_ea,lines);
+    return ((sstat&0xffffULL)<<48)|(((res>>32)&0xffffffULL)<<24)|(res&0xffffffULL);
 }
 
 /* Firmware-route probe store. Block base arrives as an arg (same bounded pattern
@@ -186,14 +198,10 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
              * poll -> read back. flash status==0 + nonzero data8 => our machinery is good
              * and the optical -6 is device-specific (ownership/registration). flash ALSO
              * -6 => the problem is our owned_startup context/timing, not the optical. */
-            /* PROBE 7p (ROOT-CAUSE FIX for -6 NO_ENTRY in 7j-7n): lv1.elf RE
-             * proved func_0x0025397c checks data_buf (arg5 / cdb[0x38]) against
-             * the LPAR memory-region RB-tree via func_0x002ce74c and returns -6
-             * when given the IOMMU bus address dma (0xc0000000) instead of lpar2.
-             * Switch back to optical (5,5,0), pass lpar2 in both CDB+0x38 and
-             * arg5 of send_device_command(248), poll check_async_status(254)
-             * with the returned tag up to 200k iterations (~250ms), invalidate
-             * ea2 with dcache_flush, and record data8 + packed (sstat,rc,async). */
+            /* PROBE 7q: 7p busted the -6 wall (sstat=0, rc=0, async=0) but READ(10)
+             * left ea2 at 0. Separate LPAR/ea2 transfer path from READ(10) auth gate:
+             * (1) INQUIRY (0x12, 36B PIO into ea2/lpar2) -> inq8 = Q(ea2+8) ('SONY    ');
+             * (2) READ(10) (0x28, LBA 16, 2048B DMA into ea2+0x800/lpar2+0x800) -> rd8. */
             u64 o1=0,o2=0;
             u64 of=(u64)(native_repo_enum(5,5,0,&o1,&o2)&0xff);    /* OPTICAL */
             u64 bus=of?native_repo_busid(o1):0;
@@ -212,20 +220,19 @@ u64 owned_startup(u64 a,u64 b,u64 c,u64 d,u64 e0,u64 f,u64 g,u64 h,u64 caller) {
                     if (mret==0) {
                         u64 cb=alloc+0x100;
                         u64 cb_lpar=p+(cb-e);
-                        build_atapi(cb,16,lpar2);
-                        u64 scmd=lv1_send_device_command(dev,1,cb_lpar,0x40,lpar2,2048);
-                        u64 sstat=(scmd>>32)&0xffffffffULL;
-                        u64 tag=scmd&0xffffffffULL;
-                        u64 res=0xffffffff00000000ULL;
-                        if (sstat==0) {
-                            for (u32 i=0;i<200000;++i) {
-                                res=lv1_check_async_status(dev,tag);
-                                if ((res>>32)==0) break;
-                            }
-                        }
-                        dcache_flush(ea2,0x1000/128);
-                        data8=Q(ea2);
-                        w1=((sstat&0xffffULL)<<48)|(((res>>32)&0xffffffULL)<<24)|(res&0xffffffULL);
+                        u64 st_inq=run_atapi(dev,cb,cb_lpar,ea2,lpar2,36,1,
+                            0x1200000024000000ULL,0ULL,
+                            0x0000000C00000024ULL,0x0000000100000001ULL);
+                        u64 inq8=Q(ea2+8);
+                        u64 st_rd=run_atapi(dev,cb,cb_lpar,ea2+0x800,lpar2+0x800,2048,16,
+                            0x2800000000100000ULL,0x0100000000000000ULL,
+                            0x0000000C00000001ULL,0x0000080000000003ULL);
+                        u64 rd8=Q(ea2+0x800);
+                        data8=(rd8!=0)?rd8:inq8;
+                        u64 tagmark=(rd8!=0)?0x5244ULL:(inq8!=0?0x4951ULL:0x4e4fULL);
+                        w1=(tagmark<<48)
+                           |((((st_inq>>48)&0xffULL)<<40)|(((st_inq>>24)&0xfULL)<<36)|((st_inq&0xfULL)<<32))
+                           |((((st_rd>>48)&0xffULL)<<24)|(((st_rd>>24)&0xffULL)<<16)|(st_rd&0xffffULL));
                     } else w1=(mret<<48)|0xBAD;
                 }
                 (void)lv1_close_device(bus,dev);

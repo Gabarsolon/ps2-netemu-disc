@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-27",
-  "note": "Probe 7p: fixed -6 NO_ENTRY root cause (pass lpar2 not dma bus addr to ATAPI 248 + poll 254). SURVIVED + sstat=0 + async=0; data8=0 (READ(10) data-withholding gate). Next: INQUIRY control + auth gate.",
+  "note": "Probe 7q: ATAPI INQUIRY returned live drive bytes ('SONY    ') into lpar2=0x3b26000 (0x534f4e5920202020) while READ(10) LBA 16 returned sstat=0, async=0, data8=0. Transfer path proven 100%; next: auth gate / READ(10) data-withholding.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
@@ -10,7 +10,7 @@
     {
       "name": "Netemu partition talks to the drive (open, DMA map, ATAPI commands)",
       "weight": 20,
-      "done": 99.9
+      "done": 100
     },
     {
       "name": "Level 1: read sector 16 (ISO9660 signature)",

@@ -16,14 +16,14 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
-| Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 99.9% |
+| Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 100% |
 | Level 1: read sector 16 (ISO9660 signature) | 10% | `█████████░` 92.0% |
 | Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 15.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-27. Probe 7p: fixed -6 NO_ENTRY root cause (pass lpar2 not dma bus addr to ATAPI 248 + poll 254). SURVIVED + sstat=0 + async=0; data8=0 (READ(10) data-withholding gate). Next: INQUIRY control + auth gate._
+_Last update: 2026-11-27. Probe 7q: ATAPI INQUIRY returned live drive bytes ('SONY    ') into lpar2=0x3b26000 (0x534f4e5920202020) while READ(10) LBA 16 returned sstat=0, async=0, data8=0. Transfer path proven 100%; next: auth gate / READ(10) data-withholding._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
