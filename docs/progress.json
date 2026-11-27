@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-27",
-  "note": "probes 7h/7i: optical returns -6 (NO_ENTRY) for storage_read regions 0/1/2 — it is ATAPI, not a block device. Raw read needs send_device_command(248)+CDB (direct sc1, patch A). Pivoting to the ATAPI path.",
+  "note": "ATAPI 248 path built, ABI verified vs ps2_emu; send_device_command=-6 (NO_ENTRY) with patch A. Likely needs full device setup (event-port+IRQ) before commands. AC-cut recovery resets RTC+fsck which blocks launch.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",
