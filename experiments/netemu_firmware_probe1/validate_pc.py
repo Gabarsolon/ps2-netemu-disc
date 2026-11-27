@@ -257,8 +257,10 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
                             # probe 7r: data8 = READ-CAP/profile/flags (0 in emulation,
                             # no real DMA so all drive reads return 0); w1 = sense/status
                             # (also 0 under emulation). Both run_atapi paths return 0 here.
+                            # 7u: emulated buffers are 0, so rd_dma==inq0==0 ->
+                            # leftover bit (0x100) sets; data8=0.
                             _w0=0
-                            _w1=0
+                            _w1=0x100
                             expected_probe=(_w0,_w1) if (q[2]>>32)==1 else (0,0)
                             assert q[8:20]==tuple(self.state()) and q[62:]==expected_probe
                             self.sectors.append(sec); self.ret(self.write_rc)
@@ -449,7 +451,7 @@ def run_suite(pyghidra,EmulatorHelper,ConsoleTaskMonitor,BigInteger):
             assert q[7]==a
             assert getattr(m,'sc1_calls',0)==19 and m.calls.count('repo_enum')==1 and m.calls.count('repo_devid')==1 and m.calls.count('repo_busid')==1
             assert q[42]==1 and q[47:53]==(0x30700d0,0x949cb8,3,0,0,0)
-            assert q[62:]==(0,0)
+            assert q[62:]==(0,0x100)
             (OUT/'pc_success_snapshot.bin').write_bytes(m.sectors[0])
             n=len(m.calls); m.call('shutdown'); assert m.calls[n:]==['original_shutdown']
             m.call('refresh'); assert m.reason_stores==1

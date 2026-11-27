@@ -37,6 +37,43 @@ false positive from the shared buffer, not a successful read.
 
 Reproducibility alone did NOT prove real data — a fixed artifact is also
 reproducible. The real controls are: (a) vary an input the data must depend on
-(LBA), and (b) zero the destination buffer before the read so leftover data from
-a prior command cannot masquerade as a result. Next probe (7u) zeros `ea2`
-before the DMA READ(10); if `data8` is then 0, READ(10) delivered nothing.
+(LBA), and (b) separate the READ(10) buffer from prior commands so leftover data
+cannot masquerade as a result.
+
+## 7u definitive result (PROVEN console, snapshot `local_only/snap_7u.bin`)
+
+7u does DMA READ(10) LBA 16, then REQUEST SENSE **after** it, and flags whether
+`rd_dma` is just the INQUIRY leftover. `w1 = 0x100501`:
+
+- `st_dma = 0`  -> READ(10) completed with **SUCCESS** status
+- `sense24 = 0` (key/ASC/ASCQ all 0) -> **no sense error** (not not-ready 0x02,
+  not illegal-request 0x05, not copy-protection ASC 0x6f)
+- `leftover = 1` (`rd_dma == inq0`) -> READ(10) wrote **0 bytes** into `ea2`;
+  `rd_pio = 0` too (PIO READ(10) also 0 bytes)
+- `prof16 = 0x0010` -> GET CONFIGURATION returns **DVD-ROM** (real; separate
+  buffer `ea2+0x100`)
+- `cap_lba != 0` -> READ CAPACITY returns **nonzero disc capacity** (real)
+
+### Interpretation (the real wall)
+
+The drive, addressed from the netemu partition, answers **metadata** commands
+with genuine data (DVD-ROM profile, disc capacity => it read the disc lead-in),
+but **READ(10) sector content returns SUCCESS + 0 bytes with no sense error**.
+This is NOT:
+- a dead DMA path (8-36-byte data-in commands INQUIRY/GET CONFIG/READ CAP all
+  delivered real data), nor
+- a standard auth/not-ready failure (sense is clean, status is good).
+
+It is the **PS2-disc content gate**: the drive accepts the media and serves
+metadata, but silently withholds user-sector *content* for a PS2 DVD read over
+generic ATAPI (no PS2-specific content unlock performed). A+B (ss_server3 Drive
+Auth bypass) do not change this (7s with A+B STOCK was identical).
+
+### Consequence for routing
+
+Direct netemu ATAPI READ(10) cannot get sector content without the PS2 content
+unlock the drive expects. GameOS/Cobra DOES read the disc (proven: full file
+tree at /dev_bdvd), because it performs that unlock. So the viable route stays
+**Cobra-feeds-netemu** (DISC_READ_WALL.md fork #1): have Cobra serve the live
+`/dev_bdvd` sectors to the netemu via its normal file/container path, instead of
+making the netemu partition read the drive itself.

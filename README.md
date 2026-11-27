@@ -9,21 +9,21 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 <!-- progress:start -->
 ## Progress
 
-![Project progress 41%](docs/progress.svg)
+![Project progress 44%](docs/progress.svg)
 
-**Overall: about 41%** (effort-weighted estimate; the real risk is not evenly spread).
+**Overall: about 44%** (effort-weighted estimate; the real risk is not evenly spread).
 
 | Stage | Weight | Done |
 |---|---:|---|
 | Patch / install / test pipeline and durable HDD log | 10% | `██████████` 100% |
 | Netemu partition talks to the drive (open, DMA map, ATAPI commands) | 20% | `██████████` 100% |
 | Level 1: read sector 16 (ISO9660 signature) | 10% | `█████████░` 88.0% |
-| Disc authentication (likely required for any data read) | 15% | `██░░░░░░░░` 15.0% |
+| Disc authentication (likely required for any data read) | 15% | `████░░░░░░` 35.0% |
 | Level 2: emulator disc layer reads from the drive (boot) | 25% | `░░░░░░░░░░` 0% |
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-27. CORRECTION (retracts the 019b86d 'breakthrough'): the netemu 'disc read' was a FALSE POSITIVE — data8=0x058000339b000000 is leftover INQUIRY data (05=CD/DVD-ROM,80=removable,9b=addl len), not disc sectors. Controls: (1) A+B STOCK gave identical bytes (A+B irrelevant); (2) changing DMA LBA 16-&gt;4096 gave identical bytes (fixed artifact). READ(10) still returns 0 disc bytes; 7q wall stands. INQUIRY works; prof16=0x10 DVD-ROM unverified. Next 7u: zero ea2 before READ(10). See docs/FIRMWARE_ROUTE_READ_CORRECTION.md._
+_Last update: 2026-11-27. 7u (trustworthy, buffer-leftover fixed): the netemu-partition drive read is characterized. Metadata works — GET CONFIGURATION=DVD-ROM (0x10), READ CAPACITY=nonzero. But READ(10) content returns SUCCESS status + 0 bytes + NO sense error (both PIO and DMA). Not a dead DMA path (small data-ins work), not a standard auth error (sense clean). = PS2-disc content gate: drive serves metadata, withholds sector content over generic ATAPI. A+B irrelevant. Viable route = Cobra-feeds-netemu (GameOS does the unlock, feeds sectors). See docs/FIRMWARE_ROUTE_READ_CORRECTION.md._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
