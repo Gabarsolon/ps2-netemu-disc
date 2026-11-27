@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-27",
-  "note": "Probe 7q: ATAPI INQUIRY returned live drive bytes ('SONY    ') into lpar2=0x3b26000 (0x534f4e5920202020) while READ(10) LBA 16 returned sstat=0, async=0, data8=0. Transfer path proven 100%; next: auth gate / READ(10) data-withholding.",
+  "note": "Probe 7r built + PC-validated (all emulation PASS, bounded-store audit PASS, self 625659...): adds GET CONFIGURATION, READ CAPACITY, REQUEST SENSE, and PIO+DMA READ(10) to characterize the disc-auth gate that withholds READ(10) data after a working INQUIRY passthrough. LV1 reversing confirms the -6 wall is the region path (0x254cb4), separate from passthrough. Ready to install; PS3 off, not console-tested.",
   "stages": [
     {
       "name": "Patch / install / test pipeline and durable HDD log",

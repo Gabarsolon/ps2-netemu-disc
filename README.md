@@ -23,7 +23,7 @@ Built on what the [Buzz! Bridge](https://github.com/Gabarsolon/buzz-bridge) proj
 | Level 3: playable (read-ahead, CD/DVD, dual layer) | 10% | `░░░░░░░░░░` 0% |
 | Level 4: usable (app, stub ISO, configs, no-disc messages) | 10% | `░░░░░░░░░░` 0% |
 
-_Last update: 2026-11-27. Probe 7q: ATAPI INQUIRY returned live drive bytes ('SONY    ') into lpar2=0x3b26000 (0x534f4e5920202020) while READ(10) LBA 16 returned sstat=0, async=0, data8=0. Transfer path proven 100%; next: auth gate / READ(10) data-withholding._
+_Last update: 2026-11-27. Probe 7r built + PC-validated (all emulation PASS, bounded-store audit PASS, self 625659...): adds GET CONFIGURATION, READ CAPACITY, REQUEST SENSE, and PIO+DMA READ(10) to characterize the disc-auth gate that withholds READ(10) data after a working INQUIRY passthrough. LV1 reversing confirms the -6 wall is the region path (0x254cb4), separate from passthrough. Ready to install; PS3 off, not console-tested._
 <!-- progress:end -->
 
 The progress block above is generated: edit `docs/progress.json` (or run `python -I tools/update_progress.py --note "..." --set "Level 1=50"`) after every iteration, then commit and push.
